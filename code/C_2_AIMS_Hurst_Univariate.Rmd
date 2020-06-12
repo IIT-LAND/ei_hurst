@@ -1,0 +1,687 @@
+---
+title: "Univariate Hurst Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+```{r, warning=FALSE, message=FALSE}
+# load libraries
+library(easypackages)
+libraries("readxl","ggplot2","MASS","psych","here","heplots","patchwork","knitr","ggseg","ggsegExtra","tidyverse","car")
+source(here("code","cohens_d.R"))
+
+# FDR threshold to use
+fdr_thresh = 0.05
+
+# define paths
+codepath = here("code")
+phenopath  = here("data","aims")
+datapath = here("data", "aims")
+resultpath = here("results")
+
+# load HCP annotations
+hcp_annot = read.delim(file.path(codepath, "GlasserHCP_annot.txt"))
+
+# make a plot of Glasser HCP parcellation
+p = ggseg(mapping=aes(fill = area), position = "stacked", atlas = glasser, show.legend = FALSE) +
+  scale_fill_brain("glasser", package="ggsegExtra")
+# ggsave(filename = here("figures","hcp_glasser_figure.pdf"))
+p
+```
+
+Load in the phenotype data that has all the demographics and clinical variables.
+
+```{r, warning=FALSE, message=FALSE}
+# Read in pheno file
+pheno_file = file.path(datapath,"tidy_pheno_data.xlsx")
+pheno_data = read_excel(pheno_file)
+# change character columns to factors
+pheno_data$Group = factor(pheno_data$Group)
+pheno_data$Sex = factor(pheno_data$Sex)
+pheno_data$Diagnosis = factor(pheno_data$Diagnosis)
+```
+
+Compute the descriptive statistics and camouflaging score
+
+```{r, warning=FALSE, message=FALSE}
+mask = pheno_data$use_subs==1
+pheno_data_subset = subset(pheno_data, mask)
+pheno_data_subset = data.frame(pheno_data_subset)
+rownames(pheno_data_subset) = pheno_data_subset$subid
+
+asd_data = subset(pheno_data_subset, pheno_data_subset$Diagnosis=="Autism")
+
+# Standardize AQ
+mean_AQ_ASC = mean(asd_data$AQ)
+max_AQ = 50
+asd_data$zAQ = (asd_data$AQ - mean_AQ_ASC)/max_AQ
+
+# Standardize ADOS
+mean_ADOS_SC = mean(asd_data$ADOS_CommSoc, na.rm = TRUE)
+max_ADOS_SC = 22
+asd_data$zADOS_SC = (asd_data$ADOS_CommSoc - mean_ADOS_SC)/max_ADOS_SC
+
+# Standardize RMET
+mean_RMET_ASC = mean(asd_data$RMET)
+max_RMET = 36
+asd_data$zRMET = (asd_data$RMET - mean_RMET_ASC)/max_RMET
+
+# compute difference in standardized scores
+asd_data$CF1 = asd_data$zAQ - asd_data$zADOS_SC
+asd_data$CF2 = (asd_data$zRMET*-1) - asd_data$zADOS_SC
+
+# run pca on CF1 and CF2
+data4pca = asd_data[!is.na(asd_data$CF1),c("sub_id","CF1","CF2")]
+pca_res = princomp(~CF1+CF2, data = data4pca, na.action = na.omit)
+
+# insert CF_PC1 into data
+data4pca$CF_PC1 = pca_res$scores[,1]
+asd_data = merge(asd_data, data4pca[,c("sub_id","CF_PC1")], by = "sub_id")
+
+# summarize PCA on CF1 and CF2
+summary(pca_res)
+
+# ANOVA for difference between autistic females vs males on CF_PC1
+mod2use = lm(CF_PC1 ~ Sex, data = asd_data)
+anova(mod2use)
+
+# effect size difference in CF_PC1
+es_res = cohens_d(asd_data[asd_data$Sex=="F","CF_PC1"],asd_data[asd_data$Sex=="M","CF_PC1"])
+es_res
+
+# merge asd_data back into the pheno_data_subset
+pheno_data_subset$CF1 = NA
+pheno_data_subset$CF2 = NA
+pheno_data_subset$CF_PC1 = NA
+sublist = asd_data$sub_id
+for (isub in 1:length(sublist)){
+  mask = pheno_data_subset$sub_id==asd_data$sub_id[isub]
+  pheno_data_subset$CF1[mask] = asd_data$CF1[isub]
+  pheno_data_subset$CF2[mask] = asd_data$CF2[isub]
+  pheno_data_subset$CF_PC1[mask] = asd_data$CF_PC1[isub]
+}
+
+# variables to describe
+vars2use = c("Diagnosis","Sex","Age","VIQ","PIQ","FIQ","CF_PC1","AQ","ADI_Social","ADI_Comm","ADI_Rep","ADOS_Comm","ADOS_Social","ADOS_Rep","ADOS_CommSoc","RMET","meanFD")
+
+# get descriptive statistics by Diagnosis
+describeBy(x = pheno_data_subset[,vars2use], group = c("Diagnosis","Sex"))
+```
+
+Analyze meanFD, age, and IQ. 
+
+```{r, warning=FALSE, message=FALSE}
+# Analysis on meanFD 
+mod2use = lm(meanFD ~ Diagnosis*Sex, data = pheno_data_subset)
+anova(mod2use)
+
+# Analysis of Age
+mod2use = lm(Age ~ Diagnosis*Sex, data = pheno_data_subset)
+anova(mod2use)
+
+# Analysis of VIQ
+mod2use = lm(VIQ ~ Diagnosis*Sex, data = pheno_data_subset)
+anova(mod2use)
+
+# Subset only TD subjects and look for sex difference
+pheno_data_subset_td = subset(pheno_data_subset, pheno_data_subset$Diagnosis=="TD")
+mod2use = lm(VIQ ~ Sex, data = pheno_data_subset_td)
+anova(mod2use)
+
+# Subset only ASD subjects and look for sex difference
+pheno_data_subset_asd = subset(pheno_data_subset, pheno_data_subset$Diagnosis=="Autism")
+mod2use = lm(VIQ ~ Sex, data = pheno_data_subset_asd)
+anova(mod2use)
+
+# Analysis of PIQ
+mod2use = lm(PIQ ~ Diagnosis*Sex, data = pheno_data_subset)
+anova(mod2use)
+
+# Analysis of FIQ
+mod2use = lm(FIQ ~ Diagnosis*Sex, data = pheno_data_subset)
+anova(mod2use)
+
+# Analysis of RMET within Autism
+asd_pheno_subset = subset(pheno_data_subset, pheno_data_subset$Diagnosis=="Autism")
+mod2use = lm(RMET ~ Sex, data = asd_pheno_subset)
+anova(mod2use)
+
+# Analysis of ADI_Social
+mod2use = lm(ADI_Social ~ Sex, data = asd_pheno_subset)
+anova(mod2use)
+
+# Analysis of ADI_Comm
+mod2use = lm(ADI_Comm ~ Sex, data = asd_pheno_subset)
+anova(mod2use)
+
+# Analysis of ADI_RRB
+mod2use = lm(ADI_Rep ~ Sex, data = asd_pheno_subset)
+anova(mod2use)
+
+# Analysis of ADOS_CommSoc
+mod2use = lm(ADOS_CommSoc ~ Sex, data = asd_pheno_subset)
+anova(mod2use)
+
+# Analysis of ADOS_Social
+mod2use = lm(ADOS_Social ~ Sex, data = asd_pheno_subset)
+anova(mod2use)
+
+# Analysis of ADOS_Comm
+mod2use = lm(ADOS_Comm ~ Sex, data = asd_pheno_subset)
+anova(mod2use)
+
+# Analysis of ADOS_RRB
+mod2use = lm(ADOS_Rep ~ Sex, data = asd_pheno_subset)
+anova(mod2use)
+```
+
+# Analyze Hurst exponent data
+
+```{r, warning=FALSE, message=FALSE}
+ncols2use = dim(hcp_annot)[1]
+
+# make temporary parcel labels
+region_labels = character(length=0)
+for (i in 1:dim(hcp_annot)[1]) {
+  region_labels = c(region_labels, sprintf("parcel_%03d",i))
+}# for i
+
+# load Hurst data
+Hdata = read.csv(file.path(datapath, "tidy_H_data.csv"),row.names=1)
+
+# merge Hurst data to pheno data
+pheno_data_subset = merge(pheno_data_subset, Hdata, by = "sub_id")
+
+# make data frames for each autism group to use later in clinical correlation analysis
+asd_data = subset(pheno_data_subset,pheno_data_subset$Diagnosis=="Autism")
+asdf_data = subset(asd_data,asd_data$Sex=="F")
+asdm_data = subset(asd_data,asd_data$Sex=="M")
+
+td_data = subset(pheno_data_subset,pheno_data_subset$Diagnosis=="TD")
+tdf_data = subset(td_data,td_data$Sex=="F")
+tdm_data = subset(td_data,td_data$Sex=="M")
+
+# initialize output_res data frame to store results into
+# colnames2use = c("Sex_Fstat", "Sex_pval","Sex_fdrq","Sex_EffectSize_MvsF",
+#                  "Dx_Fstat", "Dx_pval","Dx_fdrq","Dx_EffectSize_TDvsASD",
+#                  "Dx_x_Sex_Fstat", "Dx_x_Sex_pval","Dx_x_Sex_fdrq","Dx_x_Sex_partialEtaSq",
+#                  "r_ASDf_CF","pval_ASDf_CF","fdrq_ASDf_CF",
+#                  "r_ASDm_CF","pval_ASDm_CF","fdrq_ASDm_CF",
+#                  "z_ASDf_vs_ASDm_CF","pval_ASDf_vs_ASDm_CF")
+
+colnames2use = c("Sex_Fstat", "Sex_pval","Sex_fdrq","Sex_EffectSize_MvsF",
+                 "Dx_Fstat", "Dx_pval","Dx_fdrq","Dx_EffectSize_TDvsASD",
+                 "Dx_x_Sex_Fstat", "Dx_x_Sex_pval","Dx_x_Sex_fdrq","Dx_x_Sex_partialEtaSq",
+                 "r_ASDf_ADIsoc","pval_ASDf_ADIsoc","fdrq_ASDf_ADIsoc",
+                 "r_ASDm_ADIsoc","pval_ASDm_ADIsoc","fdrq_ASDm_ADIsoc",
+                 "z_ASDf_vs_ASDm_ADIsoc","pval_ASDf_vs_ASDm_ADIsoc",
+                 "r_ASDf_ADIcomm","pval_ASDf_ADIcomm","fdrq_ASDf_ADIcomm",
+                 "r_ASDm_ADIcomm","pval_ASDm_ADIcomm","fdrq_ASDm_ADIcomm",
+                 "z_ASDf_vs_ASDm_ADIcomm","pval_ASDf_vs_ASDm_ADIcomm",
+                 
+                 "r_ASDf_ADIrrb","pval_ASDf_ADIrrb","fdrq_ASDf_ADIrrb",
+                 "r_ASDm_ADIrrb","pval_ASDm_ADIrrb","fdrq_ASDm_ADIrrb",
+                 "z_ASDf_vs_ASDm_ADIrrb","pval_ASDf_vs_ASDm_ADIrrb",
+                 
+                 "r_ASDf_ADOScommsoc","pval_ASDf_ADOScommsoc","fdrq_ASDf_ADOScommsoc",
+                 "r_ASDm_ADOScommsoc","pval_ASDm_ADOScommsoc","fdrq_ASDm_ADOScommsoc",
+                 "z_ASDf_vs_ASDm_ADOScommsoc","pval_ASDf_vs_ASDm_ADOScommsoc",
+                 
+                 "r_ASDf_ADOSrrb","pval_ASDf_ADOSrrb","fdrq_ASDf_ADOSrrb",
+                 "r_ASDm_ADOSrrb","pval_ASDm_ADOSrrb","fdrq_ASDm_ADOSrrb",
+                 "z_ASDf_vs_ASDm_ADOSrrb","pval_ASDf_vs_ASDm_ADOSrrb",
+                 
+                 "r_ASDf_AQ","pval_ASDf_AQ","fdrq_ASDf_AQ",
+                 "r_ASDm_AQ","pval_ASDm_AQ","fdrq_ASDm_AQ",
+                 "z_ASDf_vs_ASDm_AQ","pval_ASDf_vs_ASDm_AQ",
+                 "r_TDm_AQ","pval_TDm_AQ","fdrq_TDm_AQ",
+                 "r_TDf_AQ","pval_TDf_AQ","fdrq_TDf_AQ",
+                 
+                 "r_ASDf_CF","pval_ASDf_CF","fdrq_ASDf_CF",
+                 "r_ASDm_CF","pval_ASDm_CF","fdrq_ASDm_CF",
+                 "z_ASDf_vs_ASDm_CF","pval_ASDf_vs_ASDm_CF")
+                 
+output_res = data.frame(matrix(nrow = ncols2use, ncol = length(colnames2use)))
+colnames(output_res) = colnames2use
+rownames(output_res) = region_labels
+
+# test each parcel for between-group difference in Diagnosis
+for (icol in 1:ncols2use) {
+  # make formula
+  form2use = as.formula(sprintf("%s ~ Diagnosis*Sex + meanFD + FIQ", region_labels[icol]))
+
+  # run linear model
+  mod2use = lm(formula = form2use, data = pheno_data_subset)
+  
+  # run an ANOVA
+  res2use = anova(mod2use)
+  
+  # grab ANOVA results and store into output_res
+  output_res[icol, "Sex_Fstat"] = res2use["Sex", "F value"]
+  output_res[icol, "Sex_pval"] = res2use["Sex", "Pr(>F)"]
+  output_res[icol, "Dx_Fstat"] = res2use["Diagnosis", "F value"]
+  output_res[icol, "Dx_pval"] = res2use["Diagnosis", "Pr(>F)"]
+  output_res[icol, "Dx_x_Sex_Fstat"] = res2use["Diagnosis:Sex", "F value"]
+  output_res[icol, "Dx_x_Sex_pval"] = res2use["Diagnosis:Sex", "Pr(>F)"]
+  
+  # compute effect size for diagnosis main effect
+  es_res = cohens_d(pheno_data_subset[pheno_data_subset$Diagnosis=="TD",region_labels[icol]], pheno_data_subset[pheno_data_subset$Diagnosis=="Autism",region_labels[icol]])
+  output_res[icol, "Dx_EffectSize_TDvsASD"] = es_res
+  
+  # compute effect size for sex main effect
+  es_res = cohens_d(pheno_data_subset[pheno_data_subset$Sex=="M",region_labels[icol]], pheno_data_subset[pheno_data_subset$Sex=="F",region_labels[icol]])
+  output_res[icol, "Sex_EffectSize_MvsF"] = es_res
+  
+  # compute partial eta-squared as the effect size of the interaction effect
+  eta_sq_res = etasq(mod2use)
+  output_res[icol, "Dx_x_Sex_partialEtaSq"] = eta_sq_res["Diagnosis:Sex","Partial eta^2"]
+  
+  # analyze clinical correlations
+  
+  # correlations within autism males
+  tmp_res = cor.test(asdm_data$ADI_Social,asdm_data[,region_labels[icol]])
+  output_res[icol, "r_ASDm_ADIsoc"] = tmp_res$estimate
+  output_res[icol, "pval_ASDm_ADIsoc"] = tmp_res$p.value
+  tmp_res = cor.test(asdm_data$ADI_Comm,asdm_data[,region_labels[icol]])
+  output_res[icol, "r_ASDm_ADIcomm"] = tmp_res$estimate
+  output_res[icol, "pval_ASDm_ADIcomm"] = tmp_res$p.value
+  
+  tmp_res = cor.test(asdm_data$ADI_Rep,asdm_data[,region_labels[icol]])
+  output_res[icol, "r_ASDm_ADIrrb"] = tmp_res$estimate
+  output_res[icol, "pval_ASDm_ADIrrb"] = tmp_res$p.value
+
+  tmp_res = cor.test(asdm_data$ADOS_CommSoc,asdm_data[,region_labels[icol]])
+  output_res[icol, "r_ASDm_ADOScommsoc"] = tmp_res$estimate
+  output_res[icol, "pval_ASDm_ADOScommsoc"] = tmp_res$p.value
+  
+  tmp_res = cor.test(asdm_data$ADOS_Rep,asdm_data[,region_labels[icol]])
+  output_res[icol, "r_ASDm_ADOSrrb"] = tmp_res$estimate
+  output_res[icol, "pval_ASDm_ADOSrrb"] = tmp_res$p.value
+
+  tmp_res = cor.test(asdm_data$AQ,asdm_data[,region_labels[icol]])
+  output_res[icol, "r_ASDm_AQ"] = tmp_res$estimate
+  output_res[icol, "pval_ASDm_AQ"] = tmp_res$p.value
+
+  tmp_res = cor.test(tdm_data$AQ,tdm_data[,region_labels[icol]])
+  output_res[icol, "r_TDm_AQ"] = tmp_res$estimate
+  output_res[icol, "pval_TDm_AQ"] = tmp_res$p.value
+
+  tmp_res = cor.test(asdm_data$CF_PC1,asdm_data[,region_labels[icol]])
+  output_res[icol, "r_ASDm_CF"] = tmp_res$estimate
+  output_res[icol, "pval_ASDm_CF"] = tmp_res$p.value
+  
+  # correlations within autism females
+  tmp_res = cor.test(asdf_data$ADI_Social,asdf_data[,region_labels[icol]])
+  output_res[icol, "r_ASDf_ADIsoc"] = tmp_res$estimate
+  output_res[icol, "pval_ASDf_ADIsoc"] = tmp_res$p.value
+  tmp_res = cor.test(asdf_data$ADI_Comm,asdf_data[,region_labels[icol]])
+  output_res[icol, "r_ASDf_ADIcomm"] = tmp_res$estimate
+  output_res[icol, "pval_ASDf_ADIcomm"] = tmp_res$p.value
+
+  tmp_res = cor.test(asdf_data$ADI_Rep,asdf_data[,region_labels[icol]])
+  output_res[icol, "r_ASDf_ADIrrb"] = tmp_res$estimate
+  output_res[icol, "pval_ASDf_ADIrrb"] = tmp_res$p.value
+  
+  tmp_res = cor.test(asdf_data$ADOS_CommSoc,asdf_data[,region_labels[icol]])
+  output_res[icol, "r_ASDf_ADOScommsoc"] = tmp_res$estimate
+  output_res[icol, "pval_ASDf_ADOScommsoc"] = tmp_res$p.value
+  
+  tmp_res = cor.test(asdf_data$ADOS_Rep,asdf_data[,region_labels[icol]])
+  output_res[icol, "r_ASDf_ADOSrrb"] = tmp_res$estimate
+  output_res[icol, "pval_ASDf_ADOSrrb"] = tmp_res$p.value
+
+  tmp_res = cor.test(asdf_data$AQ,asdf_data[,region_labels[icol]])
+  output_res[icol, "r_ASDf_AQ"] = tmp_res$estimate
+  output_res[icol, "pval_ASDf_AQ"] = tmp_res$p.value
+
+  tmp_res = cor.test(tdf_data$AQ,tdf_data[,region_labels[icol]])
+  output_res[icol, "r_TDf_AQ"] = tmp_res$estimate
+  output_res[icol, "pval_TDf_AQ"] = tmp_res$p.value
+
+  tmp_res = cor.test(asdf_data$CF_PC1,asdf_data[,region_labels[icol]])
+  output_res[icol, "r_ASDf_CF"] = tmp_res$estimate
+  output_res[icol, "pval_ASDf_CF"] = tmp_res$p.value
+  
+  # test if the correlations in autism males and females is different
+  r_diff = paired.r(xy = output_res[icol,"r_ASDf_ADIsoc"], 
+           xz = output_res[icol,"r_ASDm_ADIsoc"],
+           n = dim(asdf_data)[1],
+           n2 = dim(asdm_data)[1])
+  output_res[icol, "z_ASDf_vs_ASDm_ADIsoc"] = r_diff$z
+  output_res[icol, "pval_ASDf_vs_ASDm_ADIsoc"] = r_diff$p
+
+  r_diff = paired.r(xy = output_res[icol,"r_ASDf_ADIcomm"], 
+           xz = output_res[icol,"r_ASDm_ADIcomm"],
+           n = dim(asdf_data)[1],
+           n2 = dim(asdm_data)[1])
+  output_res[icol, "z_ASDf_vs_ASDm_ADIcomm"] = r_diff$z
+  output_res[icol, "pval_ASDf_vs_ASDm_ADIcomm"] = r_diff$p
+
+  r_diff = paired.r(xy = output_res[icol,"r_ASDf_ADIrrb"], 
+           xz = output_res[icol,"r_ASDm_ADIrrb"],
+           n = dim(asdf_data)[1],
+           n2 = dim(asdm_data)[1])
+  output_res[icol, "z_ASDf_vs_ASDm_ADIrrb"] = r_diff$z
+  output_res[icol, "pval_ASDf_vs_ASDm_ADIrrb"] = r_diff$p
+
+  r_diff = paired.r(xy = output_res[icol,"r_ASDf_ADOScommsoc"], 
+           xz = output_res[icol,"r_ASDm_ADOScommsoc"],
+           n = dim(asdf_data)[1],
+           n2 = dim(asdm_data)[1])
+  output_res[icol, "z_ASDf_vs_ASDm_ADOScommsoc"] = r_diff$z
+  output_res[icol, "pval_ASDf_vs_ASDm_ADOScommsoc"] = r_diff$p
+  
+  r_diff = paired.r(xy = output_res[icol,"r_ASDf_ADOSrrb"], 
+           xz = output_res[icol,"r_ASDm_ADOSrrb"],
+           n = dim(asdf_data)[1],
+           n2 = dim(asdm_data)[1])
+  output_res[icol, "z_ASDf_vs_ASDm_ADOSrrb"] = r_diff$z
+  output_res[icol, "pval_ASDf_vs_ASDm_ADOSrrb"] = r_diff$p
+
+  r_diff = paired.r(xy = output_res[icol,"r_ASDf_AQ"], 
+           xz = output_res[icol,"r_ASDm_AQ"],
+           n = dim(asdf_data)[1],
+           n2 = dim(asdm_data)[1])
+  output_res[icol, "z_ASDf_vs_ASDm_AQ"] = r_diff$z
+  output_res[icol, "pval_ASDf_vs_ASDm_AQ"] = r_diff$p
+  
+  r_diff = paired.r(xy = output_res[icol,"r_ASDf_CF"], 
+           xz = output_res[icol,"r_ASDm_CF"],
+           n = dim(asdf_data)[1],
+           n2 = dim(asdm_data)[1])
+  output_res[icol, "z_ASDf_vs_ASDm_CF"] = r_diff$z
+  output_res[icol, "pval_ASDf_vs_ASDm_CF"] = r_diff$p
+  
+}# for icol
+output_res = output_res[-c(131,172),]
+hcp_annot = hcp_annot[-c(131,172),]
+
+# compute FDR for all effects
+output_res$Dx_fdrq = p.adjust(output_res$Dx_pval, method = "fdr")
+output_res$Sex_fdrq = p.adjust(output_res$Sex_pval, method = "fdr")
+output_res$Dx_x_Sex_fdrq = p.adjust(output_res$Dx_x_Sex_pval, method = "fdr")
+output_res$fdrq_ASDm_CF = p.adjust(output_res$pval_ASDm_CF, method = "fdr")
+output_res$fdrq_ASDf_CF = p.adjust(output_res$pval_ASDf_CF, method = "fdr")
+
+output_res$fdrq_ASDm_ADIsoc = p.adjust(output_res$pval_ASDm_ADIsoc, method = "fdr")
+output_res$fdrq_ASDf_ADIsoc = p.adjust(output_res$pval_ASDf_ADIsoc, method = "fdr")
+output_res$fdrq_ASDm_ADIcomm = p.adjust(output_res$pval_ASDm_ADIcomm, method = "fdr")
+output_res$fdrq_ASDf_ADIcomm = p.adjust(output_res$pval_ASDf_ADIcomm, method = "fdr")
+output_res$fdrq_ASDm_ADIrrb = p.adjust(output_res$pval_ASDm_ADIrrb, method = "fdr")
+output_res$fdrq_ASDf_ADIrrb = p.adjust(output_res$pval_ASDf_ADIrrb, method = "fdr")
+output_res$fdrq_ASDm_ADOScommsoc = p.adjust(output_res$pval_ASDm_ADOScommsoc, method = "fdr")
+output_res$fdrq_ASDf_ADOScommsoc = p.adjust(output_res$pval_ASDf_ADOScommsoc, method = "fdr")
+output_res$fdrq_ASDm_ADOSrrb = p.adjust(output_res$pval_ASDm_ADOSrrb, method = "fdr")
+output_res$fdrq_ASDf_ADOSrrb = p.adjust(output_res$pval_ASDf_ADOSrrb, method = "fdr")
+output_res$fdrq_ASDm_AQ = p.adjust(output_res$pval_ASDm_AQ, method = "fdr")
+output_res$fdrq_ASDf_AQ = p.adjust(output_res$pval_ASDf_AQ, method = "fdr")
+output_res$fdrq_TDm_AQ = p.adjust(output_res$pval_TDm_AQ, method = "fdr")
+output_res$fdrq_TDf_AQ = p.adjust(output_res$pval_TDf_AQ, method = "fdr")
+
+output_res$fdrq_ASDf_vs_ASDm_CF = p.adjust(output_res$pval_ASDf_vs_ASDm_CF, method = "fdr")
+output_res$fdrq_ASDf_vs_ASDm_ADIsoc = p.adjust(output_res$pval_ASDf_vs_ASDm_ADIsoc, method = "fdr")
+output_res$fdrq_ASDf_vs_ASDm_ADIcomm = p.adjust(output_res$pval_ASDf_vs_ASDm_ADIcomm, method = "fdr")
+output_res$fdrq_ASDf_vs_ASDm_ADIrrb = p.adjust(output_res$pval_ASDf_vs_ASDm_ADIrrb, method = "fdr")
+output_res$fdrq_ASDf_vs_ASDm_ADOScommsoc = p.adjust(output_res$pval_ASDf_vs_ASDm_ADOScommsoc, method = "fdr")
+output_res$fdrq_ASDf_vs_ASDm_ADOSrrb = p.adjust(output_res$pval_ASDf_vs_ASDm_ADOSrrb, method = "fdr")
+
+# make columns for parcel_index and area
+output_res$parcel_index = rownames(output_res)
+output_res$area = hcp_annot$area
+output_res$area_descrip = hcp_annot$area_descrip
+
+# redo rownames of the output_res to be the area names
+rownames(output_res) = hcp_annot$area
+# write.csv(output_res,file = file.path(resultpath,"Hurst_output_res.csv"))
+```
+
+Show sex*diagnosis interaction
+
+```{r, warning=FALSE, message=FALSE}
+tmp_res = output_res[order(output_res$Dx_x_Sex_fdrq),]
+vars2use = c("area_descrip","Dx_x_Sex_Fstat","Dx_x_Sex_pval","Dx_x_Sex_fdrq","Dx_x_Sex_partialEtaSq")
+kable(tmp_res[,vars2use])
+```
+
+Plot sex*diagnosis interaction effect.
+
+```{r, warning=FALSE, message=FALSE}
+yax_label = "Hurst exponent (H)"
+
+# show effect size throughout the entire brain
+g1 = ggseg(.data=output_res, atlas=glasser, position="stacked",mapping=aes(fill=Dx_x_Sex_partialEtaSq)) +
+  theme(plot.title = element_text(hjust = 0.5)) + guides(fill=guide_legend(title="Partial eta-sq"))+
+  scale_fill_gradient2(midpoint=0.13/2, low="blue", mid="white", high="red", limits=c(0, 0.13), breaks = round(seq(from=0,to=0.12,by=0.03),2)) + guides(fill = guide_colourbar(nbin = 100))
+g1
+
+# show the regions passing FDR q<0.05
+output_res_subset = subset(output_res, output_res$Dx_x_Sex_fdrq<=0.05)
+g2 = ggseg(.data=output_res_subset, atlas=glasser, position="stacked",mapping=aes(fill=Dx_x_Sex_partialEtaSq)) +
+  theme(plot.title = element_text(hjust = 0.5)) + guides(fill=guide_legend(title="Partial eta-sq"))+
+  scale_fill_gradient2(midpoint=0.13/2, low="blue", mid="white", high="red", limits=c(0, 0.13), breaks = round(seq(from=0,to=0.12,by=0.03),2)) + guides(fill = guide_colourbar(nbin = 100))
+g2
+
+# Region p32
+area_name = "p32"
+area_descrip = "Area p32"
+reg_name = output_res$parcel_index[output_res$area==area_name]
+
+cols2use = wesanderson::wes_palette("Moonrise2")[c(1,3)] 
+
+# scatter-boxplots
+p1 = ggplot(data = pheno_data_subset, aes_string(x = "Diagnosis", y = reg_name, colour = "Diagnosis")) + facet_grid(. ~ Sex)
+p1 = p1 + geom_jitter() + geom_boxplot(fill = NA, colour = "#000000", outlier.shape = NA) + 
+  guides(colour = FALSE) + ylab(yax_label) + scale_colour_manual(values=cols2use) +
+  ggtitle(area_descrip) + theme(plot.title = element_text(hjust = 0.5))
+# ggsave(filename = here("figures","sex_x_dx_interaction_Hurst_p32.pdf"), plot = p1)
+p1
+```
+
+Describe results for Area p32
+
+```{r, warning=FALSE, message=FALSE}
+area_name = "p32"
+area_descrip = "Area p32"
+reg_name = output_res$parcel_index[output_res$area==area_name]
+
+# male TD vs ASD difference
+male_subset = subset(pheno_data_subset, pheno_data_subset$Sex=="M")
+male_dx_effect_size = cohens_d(male_subset[male_subset$Diagnosis=="TD",reg_name],male_subset[male_subset$Diagnosis=="Autism",reg_name])
+male_dx_effect_size
+
+# female TD vs ASD difference
+female_subset = subset(pheno_data_subset, pheno_data_subset$Sex=="F")
+female_dx_effect_size = cohens_d(female_subset[male_subset$Diagnosis=="TD",reg_name],female_subset[male_subset$Diagnosis=="Autism",reg_name])
+female_dx_effect_size
+
+# TD male vs female difference
+td_subset = subset(pheno_data_subset, pheno_data_subset$Diagnosis=="TD")
+td_sex_effect_size = cohens_d(td_subset[td_subset$Sex=="M",reg_name],td_subset[td_subset$Sex=="F",reg_name])
+td_sex_effect_size
+
+# ASD male vs female difference
+asd_subset = subset(pheno_data_subset, pheno_data_subset$Diagnosis=="Autism")
+asd_sex_effect_size = cohens_d(asd_subset[asd_subset$Sex=="M",reg_name],asd_subset[asd_subset$Sex=="F",reg_name])
+asd_sex_effect_size
+
+```
+
+
+# Sex differences
+
+```{r, warning=FALSE, message=FALSE}
+tmp_res = output_res[order(output_res$Sex_fdrq),]
+vars2use = c("area_descrip","Sex_Fstat","Sex_pval","Sex_fdrq","Sex_EffectSize_MvsF")
+kable(tmp_res[,vars2use])
+
+p1 = ggseg(.data = output_res, mapping=aes(fill=Sex_EffectSize_MvsF), position="stacked", atlas=glasser) + 
+  ggtitle("Sex Difference (unthresholded)") + theme(plot.title = element_text(hjust = 0.5)) + guides(fill=guide_legend(title="Cohen's d")) +
+  scale_fill_gradient2(midpoint=0.35, low="blue", mid="white", high="red", limits=c(0, 1), breaks = round(seq(from=0,to=1,by=0.2),1)) + guides(fill = guide_colourbar(nbin = 100))
+
+# Sex main effect regions surviving FDR q<0.05
+output_res_subset = subset(output_res, output_res$Sex_fdrq<=0.05)
+p2 = ggseg(.data = output_res_subset, 
+           mapping=aes(fill=Sex_EffectSize_MvsF), 
+           position="stacked", 
+           atlas=glasser) + 
+  ggtitle("Sex Difference (FDR q<0.05)") + 
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  guides(fill=guide_legend(title="Cohen's d")) +
+  scale_fill_gradient2(midpoint=0.35, low="blue", mid="white", high="red", limits=c(0, 1), breaks = round(seq(from=0,to=1,by=0.2),1)) + 
+  guides(fill = guide_colourbar(nbin = 100))
+
+p_final = p1 + p2 + plot_layout(nrow=2, ncol=1)
+# ggsave(filename = file.path(here(),"figures","sex_maineffects_unthresholded_Hurst.pdf"), plot = p_final)
+p_final
+```
+
+# Diagnosis main effects
+
+```{r, warning=FALSE, message=FALSE}
+tmp_res = output_res[order(output_res$Dx_fdrq),]
+vars2use = c("area_descrip","Dx_Fstat","Dx_pval","Dx_fdrq","Dx_EffectSize_TDvsASD")
+kable(tmp_res[,vars2use])
+
+p = ggseg(.data = output_res, 
+          mapping=aes(fill=Dx_EffectSize_TDvsASD), 
+          position="stacked", 
+          atlas=glasser) + 
+  ggtitle("Diagnosis Main Effect (unthresholded)") + 
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  guides(fill=guide_legend(title="Cohen's d")) + 
+  scale_fill_gradient2(midpoint=0, low="blue", mid="white", high="red", limits=c(-0.65, 0.65), breaks = round(seq(from=-0.6,to=0.6,by=0.3),1)) + 
+  guides(fill = guide_colourbar(nbin = 100)) 
+
+# ggsave(filename = file.path(here(),"figures","diagnosis_maineffects_unthresholded_Hurst.pdf"), plot = p)
+p
+```
+
+# Correlations with camouflaging
+
+```{r, warning=FALSE, message=FALSE}
+tmp_res = output_res[order(output_res$pval_ASDf_vs_ASDm_CF),]
+vars2use = c("area_descrip","r_ASDf_CF","pval_ASDf_CF","fdrq_ASDf_CF",
+             "r_ASDm_CF","pval_ASDm_CF","fdrq_ASDm_CF",
+             "z_ASDf_vs_ASDm_CF","pval_ASDf_vs_ASDm_CF","fdrq_ASDf_vs_ASDm_CF")
+kable(tmp_res[,vars2use])
+
+cols2use = c(wesanderson::wes_palette("Zissou1")[c(1)],wesanderson::wes_palette("Darjeeling1")[c(4)]) 
+xax_label = "Camouflaging Score"
+
+# Region p32
+area_name = "p32"
+area_descrip = "Area p32"
+reg_name = output_res$parcel_index[output_res$area==area_name]
+
+# ggseg plot to show the brain region
+output_res_subset = subset(output_res, output_res$area==area_name)
+g1 = ggseg(.data = output_res_subset, mapping=aes(fill = r_ASDf_CF), 
+           position = "stacked", atlas = glasser, show.legend = FALSE) + 
+  ggtitle(area_descrip) + theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot
+p1 = ggplot(data = asd_data, aes_string(x = "CF_PC1", y = reg_name, colour = "Sex", fill = "Sex"))
+p1 = p1 + geom_point() + geom_smooth(method = lm) + ylab(yax_label) + xlab(xax_label) + scale_color_manual(values=cols2use) + scale_fill_manual(values=cols2use) + guides(colour = FALSE, fill=FALSE) +  
+  ggtitle(area_descrip) + theme(plot.title = element_text(hjust = 0.5))
+
+p_final = g1 + p1 + plot_layout(nrow = 1, ncol = 2) 
+# ggsave(filename = here("figures","camouflaging_correlations_Hurst_p32.pdf"), plot = p_final)
+p_final
+```
+
+# Correlations with ADI Social
+
+```{r, warning=FALSE, message=FALSE}
+tmp_res = output_res[order(output_res$pval_ASDf_vs_ASDm_ADIsoc),]
+vars2use = c("area_descrip",
+             "r_ASDf_ADIsoc","pval_ASDf_ADIsoc","fdrq_ASDf_ADIsoc",
+             "r_ASDm_ADIsoc","pval_ASDm_ADIsoc","fdrq_ASDm_ADIsoc",
+             "z_ASDf_vs_ASDm_ADIsoc","pval_ASDf_vs_ASDm_ADIsoc","fdrq_ASDf_vs_ASDm_ADIsoc")
+kable(tmp_res[,vars2use])
+```
+
+# Correlations with ADI Communication
+
+```{r, warning=FALSE, message=FALSE}
+tmp_res = output_res[order(output_res$pval_ASDf_vs_ASDm_ADIsoc),]
+vars2use = c("area_descrip",
+             "r_ASDf_ADIcomm","pval_ASDf_ADIcomm","fdrq_ASDf_ADIcomm",
+             "r_ASDm_ADIcomm","pval_ASDm_ADIcomm","fdrq_ASDm_ADIcomm",
+             "z_ASDf_vs_ASDm_ADIcomm","pval_ASDf_vs_ASDm_ADIcomm","fdrq_ASDf_vs_ASDm_ADIcomm")
+kable(tmp_res[,vars2use])
+```
+
+# Correlations with ADI RRB
+
+```{r, warning=FALSE, message=FALSE}
+tmp_res = output_res[order(output_res$pval_ASDf_vs_ASDm_ADIrrb),]
+vars2use = c("area_descrip",
+             "r_ASDf_ADIrrb","pval_ASDf_ADIrrb","fdrq_ASDf_ADIrrb",
+             "r_ASDm_ADIrrb","pval_ASDm_ADIrrb","fdrq_ASDm_ADIrrb",
+             "z_ASDf_vs_ASDm_ADIrrb","pval_ASDf_vs_ASDm_ADIrrb","fdrq_ASDf_vs_ASDm_ADIrrb")
+kable(tmp_res[,vars2use])
+```
+
+# Correlations with ADOS Social-Communication
+
+```{r, warning=FALSE, message=FALSE}
+tmp_res = output_res[order(output_res$pval_ASDf_vs_ASDm_ADOScommsoc),]
+vars2use = c("area_descrip",
+             "r_ASDf_ADOScommsoc","pval_ASDf_ADOScommsoc","fdrq_ASDf_ADOScommsoc",
+             "r_ASDm_ADOScommsoc","pval_ASDm_ADOScommsoc","fdrq_ASDm_ADOScommsoc",
+             "z_ASDf_vs_ASDm_ADOScommsoc","pval_ASDf_vs_ASDm_ADOScommsoc","fdrq_ASDf_vs_ASDm_ADOScommsoc")
+kable(tmp_res[,vars2use])
+
+cols2use = c(wesanderson::wes_palette("Zissou1")[c(1)],wesanderson::wes_palette("Darjeeling1")[c(4)]) 
+xax_label = "ADOS SC"
+
+# Region p32
+area_name = "p32"
+area_descrip = "Area p32"
+reg_name = output_res$parcel_index[output_res$area==area_name]
+
+# ggseg plot to show the brain region
+output_res_subset = subset(output_res, output_res$area==area_name)
+g1 = ggseg(.data = output_res_subset, mapping=aes(fill = r_ASDf_ADOScommsoc), 
+           position = "stacked", atlas = glasser, show.legend = FALSE) + 
+  ggtitle(area_descrip) + theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot
+p1 = ggplot(data = asd_data, aes_string(x = "ADOS_CommSoc", y = reg_name, colour = "Sex", fill = "Sex"))
+p1 = p1 + geom_point() + geom_smooth(method = lm) + ylab(yax_label) + xlab(xax_label) + scale_color_manual(values=cols2use) + scale_fill_manual(values=cols2use) + guides(colour = FALSE, fill=FALSE) +  
+  ggtitle(area_descrip) + theme(plot.title = element_text(hjust = 0.5))
+
+p_final = g1 + p1 + plot_layout(nrow = 1, ncol = 2) 
+# ggsave(filename = here("figures","camouflaging_correlations_Hurst_p32.pdf"), plot = p_final)
+p_final
+
+```
+
+# Correlations with ADOS RRB
+
+```{r, warning=FALSE, message=FALSE}
+tmp_res = output_res[order(output_res$pval_ASDf_vs_ASDm_ADOSrrb),]
+vars2use = c("area_descrip",
+             "r_ASDf_ADOSrrb","pval_ASDf_ADOSrrb","fdrq_ASDf_ADOSrrb",
+             "r_ASDm_ADOSrrb","pval_ASDm_ADOSrrb","fdrq_ASDm_ADOSrrb",
+             "z_ASDf_vs_ASDm_ADOSrrb","pval_ASDf_vs_ASDm_ADOSrrb","fdrq_ASDf_vs_ASDm_ADOScommsoc")
+kable(tmp_res[,vars2use])
+```
+
+# Correlations with AQ
+
+```{r, warning=FALSE, message=FALSE}
+tmp_res = output_res[order(output_res$pval_ASDf_vs_ASDm_AQ),]
+vars2use = c("area_descrip",
+             "r_ASDf_AQ","pval_ASDf_AQ","fdrq_ASDf_AQ",
+             "r_ASDm_AQ","pval_ASDm_AQ","fdrq_ASDm_AQ",
+             "z_ASDf_vs_ASDm_AQ","pval_ASDf_vs_ASDm_AQ",
+             "r_TDf_AQ","pval_TDf_AQ","fdrq_TDf_AQ",
+             "r_TDm_AQ","pval_TDm_AQ","fdrq_TDm_AQ")
+kable(tmp_res[,vars2use])
+```

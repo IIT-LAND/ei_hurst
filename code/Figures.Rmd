@@ -1,0 +1,1837 @@
+---
+title: "Figures"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+```{r, warning=FALSE, message=FALSE}
+library(easypackages)
+libraries("here","ggplot2","reshape","ggpubr","ggrepel","forcats","patchwork","png","grid")
+
+datapath = here("data","recurrent_model")
+figpath = here("figures")
+```
+
+# Figure 1
+```{r, warning=FALSE, message=FALSE}
+# Global properties of plots
+fontSize = 8
+fstem_oof = "oof"
+
+legend_labels_PSD = c(
+                     "Piecewise fitting",
+                      expression(g == 5.6),
+                      expression(g == 14.8)
+                     )
+
+legend_labels_slope = c(expression(paste(nu[0] == 1.5," sp/s")),
+                        expression(paste(nu[0] == 2," sp/s")),
+                        'Baseline')
+
+# Load data 
+## LFPs
+LFP_1 = read.csv(file.path(datapath,"LFP_5.646067415730337.csv"))
+LFP_2 = read.csv(file.path(datapath,"LFP_14.79863985807809.csv"))
+
+# PSDs
+PSD_1 = read.csv(file.path(datapath,"PSD_5.646067415730337.csv"))
+PSD_2 = read.csv(file.path(datapath,"PSD_14.79863985807809.csv"))
+PSD_slope_1_lf = read.csv(file.path(datapath,"PSD_slope_1_5.646067415730337.csv"))
+PSD_slope_1_hf = read.csv(file.path(datapath,"PSD_slope_2_5.646067415730337.csv"))
+PSD_slope_2_lf = read.csv(file.path(datapath,"PSD_slope_1_14.79863985807809.csv"))
+PSD_slope_2_hf = read.csv(file.path(datapath,"PSD_slope_2_14.79863985807809.csv"))
+
+# LFP slopes 
+lf_slopes_g_rate_1 = read.csv(file.path(datapath,"lf_slopes_g_rate_1.5.csv"))
+lf_slopes_g_rate_2 = read.csv(file.path(datapath,"lf_slopes_g_rate_2.0.csv"))
+hf_slopes_g_rate_1 = read.csv(file.path(datapath,"hf_slopes_g_rate_1.5.csv"))
+hf_slopes_g_rate_2 = read.csv(file.path(datapath,"hf_slopes_g_rate_2.0.csv"))
+
+# H values
+LFP_H_g_rate_1 = read.csv(file.path(datapath,"LFP_H_g_rate_1.5.csv"))
+LFP_H_g_rate_2 = read.csv(file.path(datapath,"LFP_H_g_rate_2.0.csv"))
+
+# Baseline lines 
+baseline_g_slopes_1 <- data.frame("var" = 11.3,"metric"=seq(-1, 1, length.out=100),"variable"='Baseline')
+baseline_g_slopes_2 <- data.frame("var" = 11.3,"metric"=seq(-2.75, -1, length.out=100),"variable"='Baseline')
+baseline_g_H <- data.frame("var" = 11.3,"metric"=seq(1.35,1.65, length.out=100),"variable"='Baseline')
+
+
+
+# Figure 1A -------------------------------------------------------------------
+recurrent_model_pdf = file.path(datapath,"recurrent_model.png")
+img = readPNG(recurrent_model_pdf)
+g = rasterGrob(img,interpolate = TRUE)
+
+p = ggplot() + geom_blank()
+p = p + annotation_custom(g, xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf) + 
+  # theme_bw(panel.border = element_blank())
+  theme_void()
+p1a = p
+p
+
+
+# Figure 1B -------------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+LFP_1["variable"] <- "g=5.65" #'LFP 1'
+LFP_2["variable"] <- "g=14.8" #'LFP 2'
+
+LFP_all = rbind(LFP_1,LFP_2)
+LFP_all$variable = factor(LFP_all$variable, levels = c("g=5.65","g=14.8"))
+
+p1b = ggplot(data = LFP_all, aes(x = time, y = LFP, colour=variable)) + 
+  facet_grid(variable ~ .) + 
+  geom_line(size=0.25) + 
+  scale_colour_manual(values = c("dodger blue","#ff8d1e")) + guides(colour=FALSE) + 
+  ylim(-2,10) + 
+  ylab(" ") + 
+  xlab("Time (ms)") + 
+  ggtitle("LFP time series") + 
+  theme(plot.title = element_text(hjust = 0.5, size=fontSize),
+        strip.text.y = element_text(size=fontSize),
+        axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize-2),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize))
+
+# ggsave(filename = file.path(figpath,sprintf("Fig1B.pdf",fstem_oof)),plot=p1b)
+p1b
+
+
+
+# Figure 1C -------------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+PSD_1["variable"] <- 'PSD 1'
+PSD_2["variable"] <- 'PSD 2'
+PSD_slope_1_lf["variable"] <- 'PSD_slope_1_lf'
+PSD_slope_1_hf["variable"] <- 'PSD_slope_1_hf'
+PSD_slope_2_lf["variable"] <- 'PSD_slope_2_lf'
+PSD_slope_2_hf["variable"] <- 'PSD_slope_2_hf'
+
+merged_data_1 <- rbind(PSD_1,PSD_2)
+
+p = ggplot()
+p = p + geom_line(data = merged_data_1, aes(x = fx, y = PSD, colour = variable),size = 1) 
+p = p + geom_line(data = PSD_slope_1_lf, aes(x = fx, y = PSD, colour = "black"),size = 0.5,linetype = "dashed") 
+p = p + geom_line(data = PSD_slope_1_hf, aes(x = fx, y = PSD, colour = "black"),size = 0.5,linetype = "dashed") 
+p = p + geom_line(data = PSD_slope_2_lf, aes(x = fx, y = PSD, colour = "black"),size = 0.5,linetype = "dashed") 
+p = p + geom_line(data = PSD_slope_2_hf, aes(x = fx, y = PSD, colour = "black"),size = 0.5,linetype = "dashed") 
+
+p = p + xlab("Frequency (Hz)")+ ylab( expression(paste( mV^2/Hz)) ) + ggtitle("LFP PSD")
+p = p + theme(plot.title = element_text(hjust = 0.5))
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.25, 0.25),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("dashed","solid","solid"),size=c(0.5,1,1))))
+p = p + guides(colour = FALSE)
+p = p + scale_colour_manual(values = c("black","dodger blue","#ff8d1e"),labels = legend_labels_PSD)
+p = p + scale_x_log10() + scale_y_log10()
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+p1c = p
+# ggsave(filename = file.path(figpath,sprintf("Fig1C.pdf",fstem_oof)))
+p
+
+# Figure 1D -------------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+lf_slopes_g_rate_1["variable"] <- '1.5 spikes/s'
+lf_slopes_g_rate_2["variable"] <- '2 spikes/s'
+merged_data <- rbind(lf_slopes_g_rate_1,lf_slopes_g_rate_2)
+
+p = ggplot()
+p = p + geom_point(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        geom_smooth(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        guides(data = merged_data, aes(x = var, y = metric, colour = FALSE))
+p = p + geom_line(data = baseline_g_slopes_1, aes(x = var, y = metric, colour = variable),linetype = "dotdash") +
+        guides(data = baseline_g_slopes_1, aes(x = var, y = metric, colour = FALSE))
+p = p + scale_x_reverse(breaks = round(seq(20, 2, by = -2),1))
+p = p + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("1/f slope") + ggtitle("Low-frequencies <30 Hz")
+p = p + theme(plot.title = element_text(hjust = 0.5))
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.8, 0.2),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("solid","solid","dotdash"),size=c(1,1,1))))
+p = p + guides(colour=FALSE)
+p = p + scale_colour_manual(values = c("#808000","#FA8072",'black'),labels = legend_labels_slope)
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+p1d = p
+# ggsave(filename = file.path(figpath,sprintf("Fig1D.pdf",fstem_oof)))
+p
+
+# Figure 1E -------------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+hf_slopes_g_rate_1["variable"] <- '1.5 spikes/s'
+hf_slopes_g_rate_2["variable"] <- '2 spikes/s'
+merged_data <- rbind(hf_slopes_g_rate_1,hf_slopes_g_rate_2)
+
+p = ggplot()
+p = p + geom_point(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        geom_smooth(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        guides(data = merged_data, aes(x = var, y = metric, colour = FALSE))
+p = p + geom_line(data = baseline_g_slopes_2, aes(x = var, y = metric, colour = variable),linetype = "dotdash") +
+        guides(data = baseline_g_slopes_2, aes(x = var, y = metric, colour = FALSE))
+p = p + scale_x_reverse(breaks = round(seq(20, 2, by = -2),1))
+p = p + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("1/f slope") + ggtitle("High-frequencies >30 Hz")
+p = p + theme(plot.title = element_text(hjust = 0.5))
+p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("solid","solid","dotdash"),size=c(1,1,1))))
+p = p + scale_colour_manual(values = c("#808000","#FA8072",'black'),labels = legend_labels_slope)
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+p1e = p
+# ggsave(filename = file.path(figpath,sprintf("Fig1E.pdf",fstem_oof)))
+p
+
+# Figure 1F -------------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+LFP_H_g_rate_1["variable"] <- '1.5 spikes/s'
+LFP_H_g_rate_2["variable"] <- '2 spikes/s'
+merged_data <- rbind(LFP_H_g_rate_1,LFP_H_g_rate_2)
+
+p1 = ggplot()
+p1 = p1 + geom_point(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        geom_smooth(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        guides(data = merged_data, aes(x = var, y = metric, colour = FALSE))
+p1 = p1 + geom_line(data = baseline_g_H, aes(x = var, y = metric, colour = variable),linetype = "dotdash") +
+        guides(data = baseline_g_H, aes(x = var, y = metric, colour = FALSE))
+
+p1 = p1 + scale_x_reverse(breaks = round(seq(20, 2, by = -2),1))
+p1 = p1 + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("H") + ggtitle("Hurst exponent (H)")
+p1 = p1 + theme(plot.title = element_text(hjust = 0.5))
+# p1 = p1 + theme(legend.title = element_blank(),legend.position = c(0.8, 0.2),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p1 = p1 + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("solid","solid","dotdash"),size=c(1,1,1))))
+p1 = p1 + scale_colour_manual(values = c("#808000","#FA8072",'black'),labels = legend_labels_slope)
+p1 = p1 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+# ggsave(filename = file.path(figpath,sprintf("Fig1Fa.pdf",fstem_oof)), plot=p1)
+
+# Box plot
+box1 <- data.frame(seq(1,60,1),seq(1,60,1))
+box2 <- data.frame(seq(1,60,1),seq(1,60,1))
+
+# Clustering of H in 3 groups
+box1[1:20,2] = LFP_H_g_rate_1[LFP_H_g_rate_1[,"var"] < 7.5,3]
+box1[21:40,2] = LFP_H_g_rate_1[LFP_H_g_rate_1[,"var"] >= 7.5 & LFP_H_g_rate_1[,"var"] < 10,3]
+box1[41:60,2] = LFP_H_g_rate_1[LFP_H_g_rate_1[,"var"] >= 11,3]
+box1[1:20,1] = format(round(mean(LFP_H_g_rate_1[LFP_H_g_rate_1[,"var"] < 7.5,2]), 2), nsmall = 2)
+box1[21:40,1] = format(round(mean(LFP_H_g_rate_1[LFP_H_g_rate_1[,"var"] >= 7.5 & LFP_H_g_rate_1[,"var"] < 10,2]), 2), nsmall = 2)
+box1[41:60,1] = format(round(mean(LFP_H_g_rate_1[LFP_H_g_rate_1[,"var"] >= 11,2]), 2), nsmall = 2)
+colnames(box1) <- c("var","metric")
+
+box2[1:20,2] = LFP_H_g_rate_2[LFP_H_g_rate_2[,"var"] >= 5.8 & LFP_H_g_rate_2[,"var"] < 7.5,3]
+box2[21:40,2] = LFP_H_g_rate_2[LFP_H_g_rate_2[,"var"] >= 7.8 & LFP_H_g_rate_2[,"var"] < 10,3]
+box2[41:60,2] = LFP_H_g_rate_2[LFP_H_g_rate_2[,"var"] >= 11 & LFP_H_g_rate_2[,"var"] < 14.6,3]
+box2[1:20,1] = format(round(mean(LFP_H_g_rate_2[LFP_H_g_rate_2[,"var"] >= 5.8 & LFP_H_g_rate_2[,"var"] < 7.5,2]), 2), nsmall = 2)
+box2[21:40,1] = format(round(mean(LFP_H_g_rate_2[LFP_H_g_rate_2[,"var"] >= 7.8 & LFP_H_g_rate_2[,"var"] < 10,2]), 2), nsmall = 2)
+box2[41:60,1] = format(round(mean(LFP_H_g_rate_2[LFP_H_g_rate_2[,"var"] >= 11 & LFP_H_g_rate_2[,"var"] < 14.6,2]), 2), nsmall = 2)
+colnames(box2) <- c("var","metric")
+
+# boxplot
+p2 <-ggplot(box1, aes(x = fct_reorder(var,metric,.desc=TRUE), y = metric, colour = var)) + 
+  geom_boxplot(fill = NA, outlier.shape = NA)
+# Box plot with dot plot
+p2 = p2 + geom_jitter(shape=16, position=position_jitter(0.2))
+# #  Add p-value
+# p2 = p2 + stat_compare_means(method = "anova",size = 5)
+# # Annotate external rate
+# p2 = p2 + annotate(geom="text", x=3, y=1.6, label="1.5 sp/s", color="red", size = 5)
+
+# Other props.
+p2 = p2 + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("H") + ylim(1.4,1.65) 
+#p2 = p2 + scale_y_discrete(breaks = round(seq(1.4, 1.7, by = 0.1),1))
+# p2 = p2 + scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9")) + ggtitle("Hurst exponent (H)")
+p2 = p2 + scale_colour_manual(values = c("#808000","#808000","#808000")) + ggtitle("1.5 sp/s")
+p2 = p2 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize,hjust = 0.5),
+        legend.position = "none")
+# ggsave(filename = file.path(figpath,sprintf("Fig1Fb.pdf",fstem_oof)), plot=p2)
+
+# boxplot
+p3 <-ggplot(box2, aes(x = fct_reorder(var,metric,.desc=TRUE), y = metric, colour = var)) + 
+  geom_boxplot(fill = NA, outlier.shape = NA)
+# Box plot with dot plot
+p3 = p3 + geom_jitter(shape=16, position=position_jitter(0.2))
+# #  Add p-value
+# p3 = p3 + stat_compare_means(method = "anova",size = 5)
+# # Annotate external rate
+# p3 = p3 + annotate(geom="text", x=3, y=1.5, label="2 sp/s", color="red", size = 5)
+
+# Other props.
+p3 = p3 + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("H") + ylim(1.4,1.55)
+#p3 = p3 + scale_y_discrete(breaks = round(seq(1.4, 1.7, by = 0.1),1))
+# p3 = p3 + scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9")) + ggtitle("Hurst exponent (H)")
+p3 = p3 + scale_colour_manual(values = c("#FA8072","#FA8072","#FA8072")) + ggtitle("2 sp/s")
+p3 = p3 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize,hjust = 0.5),
+        legend.position = "none")
+# ggsave(filename = file.path(figpath,sprintf("Fig1Fc.pdf",fstem_oof)), plot=p3)
+
+p1f = p1 / (p2 | p3)
+# multiplot(p1, p2, p3,layout = matrix(c(1,1,2,3),nrow=2, byrow=TRUE))
+# ggsave(filename = file.path(figpath,sprintf("Fig1F.pdf",fstem_oof)), plot=p1f)
+p1f
+
+# Put plots together
+p_final = (p1a | p1b | p1c) / (p1d | p1e | p1) / (p2 | p3) + plot_layout(heights =c(1,1,1.1))
+ggsave(filename = file.path(figpath,"Fig1.pdf"), plot=p_final)
+p_final
+```
+
+
+# Figure 2
+```{r, warning=FALSE, message=FALSE}
+# Global properties of plots
+fontSize = 8
+fstem_oof = "oof"
+
+# Load data 
+## HRF
+HRF = read.csv(file.path(datapath,"HRF.csv"))
+
+## FFTs of HRF and HPF
+fft_HRF = read.csv(file.path(datapath,"fft_HRF.csv"))
+fft_HPF = read.csv(file.path(datapath,"fft_HPF.csv"))
+
+# H values
+BOLD_H_g_rate_1 = read.csv(file.path(datapath,"BOLD_H_g_rate_1.5_Magri_kernel_Yes_HPF.csv"))
+BOLD_H_g_rate_2 = read.csv(file.path(datapath,"BOLD_H_g_rate_2.0_Magri_kernel_Yes_HPF.csv"))
+
+# Correlation of LFP power and BOLD 
+corr_matrix = read.csv(file.path(datapath,"corr_matrix_Magri_kernel_Yes_HPF.csv"))
+alpha_band = read.csv(file.path(datapath,"alpha_band_Magri_kernel_Yes_HPF.csv"))
+beta_band = read.csv(file.path(datapath,"beta_band_Magri_kernel_Yes_HPF.csv"))
+gamma_band = read.csv(file.path(datapath,"gamma_band_Magri_kernel_Yes_HPF.csv"))
+LFP_band = read.csv(file.path(datapath,"LFP_band_Magri_kernel_Yes_HPF.csv"))
+
+# Baseline lines 
+baseline_g_H <- data.frame("var" = 11.3,"metric"=seq(1.2,1.65, length.out=100),"variable"='Baseline')
+
+
+# Figure 2A -------------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+
+colnames(corr_matrix) <- c('X.1','X','Y','r')
+
+# jet colormap
+jet.colors <- colorRampPalette(c("#00007F", "blue", "#007FFF", "cyan", "#7FFF7F", "yellow", "#FF7F00", "red", "#7F0000"))
+
+cMid = 0.1
+cLims = c(-0.1,0.3)
+
+p = ggplot(corr_matrix, aes(X, Y, fill= r)) + geom_tile()
+# p = p + scale_fill_gradientn(colors = jet.colors(7))
+# p = p + scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100))
+p = p + scale_fill_gradient2(low="blue", mid="white", high="red",
+                             midpoint=cMid, limits=cLims)
+p = p + xlab("Delay (s)") + ylab("Frequency (Hz)")+ ggtitle("Correlation between LFP power and BOLD")
+p = p + theme(plot.title = element_text(hjust = 0.5))
+p = p + scale_y_reverse(breaks = round(seq(100, 0, by = -20),1))
+
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.title = element_text(size=fontSize,hjust=0.25))
+
+p2a = p
+# ggsave(filename = file.path(figpath,sprintf("Fig2A.pdf",fstem_oof)))
+p
+
+# Figure 2B -------------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+alpha_band["variable"] <- 'alpha'
+beta_band["variable"] <- 'beta'
+gamma_band["variable"] <- 'gamma'
+LFP_band["variable"] <- 'LFP'
+
+merged_data <- rbind(alpha_band,beta_band,gamma_band,LFP_band)
+
+p = ggplot()
+p = p + geom_line(data = merged_data, aes(x = time, y = band, colour = variable),size = 1) 
+p = p + xlab("Delay (s)") + ylab("Correlation") + ggtitle("Correlation in selected frequency bands")
+p = p + theme(plot.title = element_text(hjust = 0.5))
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.9, 0.85),legend.text = element_text(size=fontSize),legend.text.align = 0)
+p = p + scale_colour_manual(values = c("#006400","red","blue","black")) + guides(colour=FALSE)
+
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+p2b = p
+# ggsave(filename = file.path(figpath,sprintf("Fig2B.pdf",fstem_oof)))
+p
+
+# Figure 2C and 2D ------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+
+# Box plot
+box1 <- data.frame(seq(1,60,1),seq(1,60,1))
+box2 <- data.frame(seq(1,60,1),seq(1,60,1))
+
+# Clustering of H in 3 groups
+box1[1:20,2] = BOLD_H_g_rate_1[seq(0,60,3),3]
+box1[21:40,2] = BOLD_H_g_rate_1[seq(1,60,3),3]
+box1[41:60,2] = BOLD_H_g_rate_1[seq(2,60,3),3]
+box1[1:20,1] = format(round(mean(BOLD_H_g_rate_1[seq(0,60,3),2]), 2), nsmall = 2)
+box1[21:40,1] = format(round(mean(BOLD_H_g_rate_1[seq(1,60,3),2]), 2), nsmall = 2)
+box1[41:60,1] = format(round(mean(BOLD_H_g_rate_1[seq(2,60,3),2]), 2), nsmall = 2)
+colnames(box1) <- c("var","metric")
+
+box2[1:20,2] = BOLD_H_g_rate_2[seq(0,60,3),3]
+box2[21:40,2] = BOLD_H_g_rate_2[seq(1,60,3),3]
+box2[41:60,2] = BOLD_H_g_rate_2[seq(2,60,3),3]
+box2[1:20,1] = format(round(mean(BOLD_H_g_rate_2[seq(0,60,3),2]), 2), nsmall = 2)
+box2[21:40,1] = format(round(mean(BOLD_H_g_rate_2[seq(1,60,3),2]), 2), nsmall = 2)
+box2[41:60,1] = format(round(mean(BOLD_H_g_rate_2[seq(2,60,3),2]), 2), nsmall = 2)
+colnames(box2) <- c("var","metric")
+
+# boxplot
+p2 <-ggplot(box1, aes(x = fct_reorder(var,metric,.desc=TRUE), y = metric, colour = var)) + 
+  geom_boxplot(fill = NA, outlier.shape = NA)
+# Box plot with dot plot
+p2 = p2 + geom_jitter(shape=16, position=position_jitter(0.2))
+# #  Add p-value
+# p2 = p2 + stat_compare_means(method = "anova",size = 5)
+# # Annotate external rate
+# p2 = p2 + annotate(geom="text", x=3, y=1.6, label="1.5 sp/s", color="red", size = 6)
+
+# Other props.
+p2 = p2 + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("H") + ylim(1.2,1.65) + ggtitle("1.5 sp/s")
+p2 = p2 + theme(plot.title = element_text(hjust = 0.5))
+#p2 = p2 + scale_y_discrete(breaks = round(seq(1.4, 1.7, by = 0.1),1))
+p2 = p2 + scale_color_manual(values=c("#808000", "#808000", "#808000"))
+p2 = p2 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+p2c = p2
+# ggsave(filename = file.path(figpath,sprintf("Fig2C.pdf",fstem_oof)),plot=p2c)
+p2
+
+# boxplot
+p3 <-ggplot(box2, aes(x = fct_reorder(var,metric,.desc=TRUE), y = metric, colour = var)) + 
+  geom_boxplot(fill = NA, outlier.shape = NA)
+# Box plot with dot plot
+p3 = p3 + geom_jitter(shape=16, position=position_jitter(0.2))
+# #  Add p-value
+# p3 = p3 + stat_compare_means(method = "anova",size = 5)
+# # Annotate external rate
+# p3 = p3 + annotate(geom="text", x=3, y=1.5, label="2 sp/s", color="red", size = 6)
+
+# Other props.
+p3 = p3 + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("H") + ylim(1.1,1.55) + ggtitle("2 sp/s")
+p3 = p3 + theme(plot.title = element_text(hjust = 0.5))
+#p3 = p3 + scale_y_discrete(breaks = round(seq(1.4, 1.7, by = 0.1),1))
+p3 = p3 + scale_color_manual(values=c("#FA8072", "#FA8072", "#FA8072"))
+p3 = p3 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+p2d = p3
+# ggsave(filename = file.path(figpath,sprintf("Fig2D.pdf",fstem_oof)),plot=p2d)
+p3
+
+# Put plots together
+p_final = (p2a | p2b) / (p2c | p2d)
+ggsave(filename = file.path(figpath,sprintf("Fig2.pdf",fstem_oof)), plot=p_final)
+p_final
+```
+
+# Figure 3
+```{r, warning=FALSE, message=FALSE}
+# Global properties of plots
+fontSize = 8
+fstem_oof = "oof"
+
+legend_labels_slope = c(expression(paste(nu[0] == 1.5," sp/s")),
+                        expression(paste(nu[0] == 2," sp/s")),
+                        'Baseline')
+
+
+# Data for Figure 3A-B
+# H values
+LFP_H_vth_rate_1 = read.csv(file.path(datapath,"LFP_H_vth_rate_1.5.csv"))
+LFP_H_vth_rate_2 = read.csv(file.path(datapath,"LFP_H_vth_rate_2.0.csv"))
+
+# H values
+LFP_H_EL_rate_1 = read.csv(file.path(datapath,"LFP_H_EL_rate_1.5.csv"))
+LFP_H_EL_rate_2 = read.csv(file.path(datapath,"LFP_H_EL_rate_2.0.csv"))
+
+# Baseline lines 
+baseline_vth_H <- data.frame("var" = -52,"metric"=seq(1.35,1.7, length.out=100),"variable"='Baseline')
+
+baseline_EL_H <- data.frame("var" = -70,"metric"=seq(1.35,1.75, length.out=100),"variable"='Baseline')
+
+
+# Figure 3A -------------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+LFP_H_vth_rate_1["variable"] <- '1.5 spikes/s'
+LFP_H_vth_rate_2["variable"] <- '2 spikes/s'
+merged_data <- rbind(LFP_H_vth_rate_1,LFP_H_vth_rate_2)
+
+p = ggplot()
+p = p + geom_point(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        geom_smooth(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        guides(data = merged_data, aes(x = var, y = metric, colour = FALSE))
+p = p + geom_line(data = baseline_vth_H, aes(x = var, y = metric, colour = variable),linetype = "dotdash") +
+        guides(data = baseline_vth_H, aes(x = var, y = metric, colour = FALSE))
+p = p + scale_x_reverse(breaks = round(seq(-51.5, -53, by = -0.5),1))
+p = p + xlab( expression(paste( V[th]," (mV)")) ) + ylab("H") + ggtitle(expression(paste("Voltage Threshold (", V[th],")")))
+p = p + theme(plot.title = element_text(hjust = 0.5)) + guides(colour=FALSE)
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.8, 0.2),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("solid","solid","dotdash"),size=c(1,1,1))))
+p = p + scale_colour_manual(values = c("#808000","#FA8072","black"),labels = legend_labels_slope)
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+p3a = p
+# ggsave(filename = file.path(figpath,sprintf("Fig3A.pdf",fstem_oof)))
+p
+
+# Figure 3B -------------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+LFP_H_EL_rate_1["variable"] <- '1.5 spikes/s'
+LFP_H_EL_rate_2["variable"] <- '2 spikes/s'
+merged_data <- rbind(LFP_H_EL_rate_1,LFP_H_EL_rate_2)
+
+p = ggplot()
+p = p + geom_point(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        geom_smooth(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        guides(data = merged_data, aes(x = var, y = metric, colour = FALSE))
+p = p + geom_line(data = baseline_EL_H, aes(x = var, y = metric, colour = variable),linetype = "dotdash") +
+        guides(data = baseline_EL_H, aes(x = var, y = metric, colour = FALSE))
+# p = p + scale_x_reverse(breaks = round(seq(-51.5, -53, by = -0.5),1))
+p = p + xlab( expression(paste( E[L]," (mV)")) ) + ylab("H") + ggtitle(expression(paste("Resting Potential (", E[L],")")))
+p = p + theme(plot.title = element_text(hjust = 0.5)) + guides(colour=FALSE)
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.8, 0.2),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("solid","solid","dotdash"),size=c(1,1,1))))
+p = p + scale_colour_manual(values = c("#808000","#FA8072",'black'),labels = legend_labels_slope)
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+p3b = p
+# ggsave(filename = file.path(figpath,sprintf("Fig3B.pdf",fstem_oof)))
+p
+
+
+# Figure 3C -------------------------------------------------------------------
+# initial information
+window_size = 512
+nwindows = 3529
+vol_inject_start = 970
+vol_treatment_start = vol_inject_start+900 
+
+# read in sliding-window analysis data
+datapath_dreadd = here("data","dreadd")
+data_win = read.csv(file.path(datapath_dreadd,"pheno_data+Hwin_dreaddexcitation.csv"))
+
+# melt the data frame into long format
+data_win_long = melt(data_win, 
+                     id.vars = c("filename","condition","scan_day","H"))
+colnames(data_win_long)[ncol(data_win_long)] = "Hwin"
+
+# make a time column
+data_win_long$time = NA
+for (i in 1:nwindows){
+  mask = data_win_long$variable==sprintf("window_%04d",i)
+  data_win_long[mask,"time"] = i
+}
+
+# make column indicating treatment phase
+data_win_long$treatment_phase = NA
+data_win_long$treatment_phase[data_win_long$time<=(vol_inject_start-window_size)-1] = "Baseline"
+data_win_long$treatment_phase[data_win_long$time>=(vol_inject_start-window_size) & data_win_long$time<=(vol_treatment_start-window_size)-1] = "Transition"
+data_win_long$treatment_phase[data_win_long$time>(vol_treatment_start-window_size)] = "Treatment"
+data_win_long$treatment_phase = factor(data_win_long$treatment_phase)
+
+
+# plotting using GAM smoother for both individual and group trajectories
+yLims = c(1.4,1.8)
+p = ggplot(data = data_win_long, 
+           aes(x = time,
+               y = Hwin,
+               group = filename)) +
+            facet_grid(. ~ condition)
+
+# plot data, one line per mouse
+# p = p + geom_line(alpha=0.5,colour="gray75")
+
+# add smoothed individual lines for each mouse
+p = p + geom_smooth(se = FALSE ,colour='gray75',alpha=0.1)
+
+# add group-level fit line
+p = p + geom_smooth(se=TRUE, aes(group = interaction(condition,treatment_phase), colour = treatment_phase), size=4)
+
+# add other stuff to the plot
+p = p + geom_vline(xintercept = (vol_inject_start-window_size)) +
+  geom_vline(xintercept = vol_treatment_start-window_size) +
+  ylab("H") +
+  xlab("Time Window") + ggtitle("DREADD Excitation") +
+  scale_y_continuous(limits = yLims) + guides(colour=FALSE)
+
+p = p + theme(axis.text.x = element_text(size=fontSize),
+              axis.text.y = element_text(size=fontSize),
+              axis.title.x = element_text(size=fontSize),
+              axis.title.y = element_text(size=fontSize),
+              strip.text.x = element_text(size=fontSize),
+              plot.title = element_text(size=fontSize,hjust = 0.5))
+
+p3c = p
+# save figure
+# ggsave(filename = file.path(figpath,"Fig3C.pdf"))
+p
+
+# Figure 3D -------------------------------------------------------------------
+# initial information
+window_size = 512
+nwindows = 3389
+vol_inject_start = 900
+vol_treatment_start = 1800
+
+# read in sliding-window analysis data
+data_win = read.csv(file.path(datapath_dreadd,"pheno_data+Hwin_dreaddsilencing.csv"))
+
+# melt the data frame into long format
+data_win_long = melt(data_win, 
+                     id.vars = c("filename","condition","scan_day","H"))
+colnames(data_win_long)[ncol(data_win_long)] = "Hwin"
+
+# make a time column
+data_win_long$time = NA
+for (i in 1:nwindows){
+  mask = data_win_long$variable==sprintf("window_%04d",i)
+  data_win_long[mask,"time"] = i
+}
+
+# make column indicating treatment phase
+data_win_long$treatment_phase = NA
+data_win_long$treatment_phase[data_win_long$time<=(vol_inject_start-window_size)-1] = "Baseline"
+data_win_long$treatment_phase[data_win_long$time>=(vol_inject_start-window_size) & data_win_long$time<=(vol_treatment_start-window_size)-1] = "Transition"
+data_win_long$treatment_phase[data_win_long$time>(vol_treatment_start-window_size)] = "Treatment"
+data_win_long$treatment_phase = factor(data_win_long$treatment_phase)
+
+# plotting using GAM smoother for both individual and group trajectories
+yLims = c(1.4,1.8)
+p = ggplot(data = data_win_long, 
+           aes(x = time,
+               y = Hwin,
+               group = filename)) +
+            facet_grid(. ~ condition)
+
+# plot data, one line per mouse
+# p = p + geom_line(alpha=0.5,colour="gray75")
+
+# add smoothed individual lines for each mouse
+p = p + geom_smooth(se = FALSE ,colour='gray75',alpha=0.1)
+
+# add group-level fit line
+p = p + geom_smooth(se=TRUE, aes(group = interaction(condition,treatment_phase), colour = treatment_phase), size=4)
+
+# add other stuff to the plot
+p = p + geom_vline(xintercept = (vol_inject_start-window_size)) +
+  geom_vline(xintercept = vol_treatment_start-window_size) +
+  ylab("H") +
+  xlab("Time Window") + ggtitle("DREADD Silencing") + 
+  scale_y_continuous(limits = yLims) + guides(colour=FALSE)
+
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize,hjust = 0.5))
+
+p3d = p
+# save figure
+# ggsave(filename = file.path(figpath,"Fig3D.pdf"))
+p
+
+# Put plots together
+p_final = (p3a | p3b) / (p3c | p3d)
+ggsave(filename = file.path(figpath,"Fig3.pdf"), plot=p_final)
+p_final
+```
+
+# Supp Figure 1
+```{r, warning=FALSE, message=FALSE}
+fontSize = 8
+datapath_gao = here("data","gao_model")
+
+fstem_oof = "oof"
+file2use = file.path(datapath_gao,sprintf("Hsim_%s.csv",fstem_oof))
+data_oof = read.csv(file2use)
+
+# H of BOLD
+BOLD_H = read.csv(file.path(datapath,"Gao_BOLD_H_Magri_HRF.csv"))
+data_oof[,4] = BOLD_H[,3]
+
+# Supp Fig 1A -----------------------------------------------------------------
+gao_model_pdf = file.path(datapath_gao,"gao_model.png")
+img = readPNG(gao_model_pdf)
+g = rasterGrob(img,interpolate = TRUE)
+
+p = ggplot() + geom_blank()
+p = p + annotation_custom(g, xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf) + 
+  theme_void()
+ps1a = p
+p
+
+
+# Supp Fig 1B -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+
+ei_oof_data = read.csv(file.path(datapath_gao,"EIsim_oof.csv"))
+nchannels = 128
+ei_oof_plot = ggplot(data = ei_oof_data, aes(x = EIratio, y = channel_001))
+for (ichan in 1:nchannels){
+  chan_name = sprintf("channel_%03d",ichan)
+  ei_oof_plot = ei_oof_plot + geom_line(aes_string(y=chan_name), alpha = 0.3, colour = "grey60")  
+}
+ei_oof_data$mean_H = rowMeans(ei_oof_data[,3:ncol(ei_oof_data)])
+ei_oof_plot = ei_oof_plot + geom_smooth(data = ei_oof_data, aes(y=ei_oof_data$mean_H))
+ei_oof_plot = ei_oof_plot + scale_x_continuous(breaks=ei_oof_data$EIratio[labelidx2use],
+                                               labels=ei_oof_data$EIratio[labelidx2use])
+ei_oof_plot = ei_oof_plot + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("1/f slope") + ggtitle("Ratio of synaptic conductances")
+ei_oof_plot = ei_oof_plot + theme(plot.title = element_text(hjust = 0.5))
+ei_oof_plot = ei_oof_plot + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+ei_oof_plot = ei_oof_plot + scale_x_reverse()
+
+ps1b = ei_oof_plot
+# ggsave(filename = file.path(figpath,"SuppFig1B.pdf"), plot=ei_oof_plot)
+ei_oof_plot
+
+# Supp Fig 1C -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+
+ei_data = read.csv(file.path(datapath_gao,"EIsim_H.csv"))
+nchannels = 128
+ei_H_plot = ggplot(data = ei_data, aes(x = EIratio, y = channel_001))
+for (ichan in 1:nchannels){
+  chan_name = sprintf("channel_%03d",ichan)
+  ei_H_plot = ei_H_plot + geom_line(aes_string(y=chan_name), alpha = 0.3, colour = "grey60")  
+}
+ei_data$mean_H = rowMeans(ei_data[,3:ncol(ei_data)])
+ei_H_plot = ei_H_plot + geom_smooth(data = ei_data, aes(y=ei_data$mean_H))
+ei_H_plot = ei_H_plot + scale_x_continuous(breaks=ei_data$EIratio[labelidx2use],
+                                           labels=ei_data$EIratio[labelidx2use])
+ei_H_plot = ei_H_plot + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("H") + ggtitle("Ratio of synaptic conductances")
+ei_H_plot = ei_H_plot + theme(plot.title = element_text(hjust = 0.5))
+ei_H_plot = ei_H_plot + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+ei_H_plot = ei_H_plot + scale_x_reverse()
+
+
+ps1c = ei_H_plot
+# ggsave(filename = file.path(figpath,"SuppFig1C.pdf"), plot=ei_H_plot)
+ei_H_plot
+
+# Supp Fig 1D -----------------------------------------------------------------
+y_limits = c(1.4,2)
+labelidx2use = c(1,6,11,16,21)
+
+melted_data_oof = melt(data_oof, id.vars = c("legend_labels","oof"))
+
+p = ggplot(data = melted_data_oof, aes(x = legend_labels, y = value, colour = variable))
+p = p + geom_point() + geom_smooth() + guides(colour = FALSE)
+p = p + scale_x_continuous(breaks=data_oof$legend_labels[labelidx2use], labels=data_oof$legend_labels[labelidx2use])
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+p = p + xlab("1/f slope in LFP data") + ylab("H") + ggtitle("Simulated LFP (1/f only)")
+p = p + theme(plot.title = element_text(hjust = 0.5))
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+ps1d = p
+# ggsave(filename = file.path(figpath,"SuppFig1D.pdf"), plot=p)
+p
+
+# Put plots together
+p_final = (ps1a | ps1b) / (ps1c | ps1d)
+ggsave(filename = file.path(figpath,"SuppFig1.pdf"), plot=p_final)
+p_final
+```
+
+# Supp Figure 2
+```{r, warning=FALSE, message=FALSE}
+# Global properties of plots
+fontSize = 8
+fstem_oof = "oof"
+
+legend_labels_PSD = c(
+                     "FOOOF fitting",
+                      expression(g == 5.6),
+                      expression(g == 14.8)
+                     )
+
+legend_labels_slope = c(expression(paste(nu[0] == 1.5," sp/s")),
+                        expression(paste(nu[0] == 2," sp/s")),
+                        'Baseline')
+
+# Load data 
+# PSDs
+PSD_1 = read.csv(file.path(datapath,"PSD_2_5.646067415730337.csv"))
+PSD_2 = read.csv(file.path(datapath,"PSD_2_14.79863985807809.csv"))
+fooof_1 = read.csv(file.path(datapath,"fooof_5.646067415730337.csv"))
+fooof_2 = read.csv(file.path(datapath,"fooof_14.79863985807809.csv"))
+
+# Ap. slopes
+fooof_ap_g_rate_1 = read.csv(file.path(datapath,"fooof_ap_g_rate_1.5.csv"))
+fooof_ap_g_rate_2 = read.csv(file.path(datapath,"fooof_ap_g_rate_2.0.csv"))
+
+# Baseline lines 
+baseline_g_ap_slopes <- data.frame("var" = 11.3,"metric"=seq(-1.25, 0, length.out=100),"variable"='Baseline')
+
+# Supp Fig 2A -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+PSD_1["variable"] <- 'PSD 1'
+PSD_2["variable"] <- 'PSD 2'
+fooof_1["variable"] <- 'PSD_slope_1_ap'
+fooof_2["variable"] <- 'PSD_slope_2_ap'
+
+merged_data_1 <- rbind(PSD_1,PSD_2)
+
+p = ggplot()
+p = p + geom_line(data = merged_data_1, aes(x = fx, y = PSD, colour = variable),size = 1) 
+p = p + geom_line(data = fooof_1, aes(x = fx, y = PSD, colour = "black"),size = 0.5,linetype = "dashed") 
+p = p + geom_line(data = fooof_2, aes(x = fx, y = PSD, colour = "black"),size = 0.5,linetype = "dashed") 
+
+p = p + xlab("Frequency (Hz)")+ ylab( expression(paste( mV^2/Hz)) ) + ggtitle("LFP PSD")
+p = p + theme(plot.title = element_text(hjust = 0.5))
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.25, 0.25),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("dashed","solid","solid"),size=c(0.5,1,1))))
+p = p + guides(colour = FALSE)
+p = p + scale_colour_manual(values = c("black","dodger blue","#ff8d1e"),labels = legend_labels_PSD)
+p = p + scale_x_log10() + scale_y_log10()
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+ps2a = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig2A.pdf",fstem_oof)))
+p
+
+# Supp Fig 2B -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+fooof_ap_g_rate_1["variable"] <- '1.5 spikes/s'
+fooof_ap_g_rate_2["variable"] <- '2 spikes/s'
+merged_data <- rbind(fooof_ap_g_rate_1,fooof_ap_g_rate_2)
+
+p = ggplot()
+p = p + geom_point(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        geom_smooth(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        guides(data = merged_data, aes(x = var, y = metric, colour = FALSE))
+p = p + geom_line(data = baseline_g_ap_slopes, aes(x = var, y = metric, colour = variable),linetype = "dotdash") +
+        guides(data = baseline_g_ap_slopes, aes(x = var, y = metric, colour = FALSE))
+p = p + scale_x_reverse(breaks = round(seq(20, 2, by = -2),1))
+p = p + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("1/f slope") + ggtitle("Aperiodic slope")
+p = p + theme(plot.title = element_text(hjust = 0.5)) + guides(colour=FALSE)
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.8, 0.2),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("solid","solid","dotdash"),size=c(1,1,1))))
+p = p + scale_colour_manual(values = c("#808000","#FA8072",'black'),labels = legend_labels_slope)
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+ps2b = p 
+# ggsave(filename = file.path(figpath,sprintf("SuppFig2B.pdf",fstem_oof)))
+p
+
+# Put plots together
+p_final = (ps2a | ps2b)
+ggsave(filename = file.path(figpath,sprintf("SuppFig2.pdf",fstem_oof)), plot=p_final)
+p_final
+```
+
+# Supp Figure 3
+```{r, warning=FALSE, message=FALSE}
+# Global properties of plots
+fontSize = 8
+fstem_oof = "oof"
+
+# Load data
+# LFPs
+LFP_1 = read.csv(file.path(datapath,"LFP_5.646067415730337.csv"))
+LFP_2 = read.csv(file.path(datapath,"LFP_14.79863985807809.csv"))
+
+# PSDs
+PSD_1 = read.csv(file.path(datapath,"PSD_5.646067415730337.csv"))
+PSD_2 = read.csv(file.path(datapath,"PSD_14.79863985807809.csv"))
+PSD_slope_1_lf = read.csv(file.path(datapath,"PSD_slope_1_5.646067415730337.csv"))
+PSD_slope_1_hf = read.csv(file.path(datapath,"PSD_slope_2_5.646067415730337.csv"))
+PSD_slope_2_lf = read.csv(file.path(datapath,"PSD_slope_1_14.79863985807809.csv"))
+PSD_slope_2_hf = read.csv(file.path(datapath,"PSD_slope_2_14.79863985807809.csv"))
+
+## HRF
+HRF = read.csv(file.path(datapath,"HRF.csv"))
+
+## FFTs of HRF and HPF
+fft_HRF = read.csv(file.path(datapath,"fft_HRF.csv"))
+fft_HPF = read.csv(file.path(datapath,"fft_HPF.csv"))
+
+## FFTs
+fft_BOLD_1_HPF_No = read.csv(file.path(datapath,"fft_BOLD_HPF_No_6.333595920236343.csv"))
+fft_BOLD_2_HPF_No = read.csv(file.path(datapath,"fft_BOLD_HPF_No_13.409410112357872.csv"))
+fft_BOLD_1_HPF_Yes = read.csv(file.path(datapath,"fft_BOLD_HPF_Yes_6.333595920236343.csv"))
+fft_BOLD_2_HPF_Yes = read.csv(file.path(datapath,"fft_BOLD_HPF_Yes_13.409410112357872.csv"))
+
+# BOLD
+BOLD_1 = read.csv(file.path(datapath,"BOLD_6.333595920236343.csv"))
+BOLD_2 = read.csv(file.path(datapath,"BOLD_13.409410112357872.csv"))
+
+# Supp Fig 3A -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+LFP_1["variable"] <- "g=5.65" #'LFP 1'
+LFP_2["variable"] <- "g=14.8" #'LFP 2'
+
+LFP_all = rbind(LFP_1,LFP_2)
+LFP_all$variable = factor(LFP_all$variable, levels = c("g=5.65","g=14.8"))
+
+p1b = ggplot(data = LFP_all, aes(x = time, y = LFP, colour=variable)) + 
+  facet_grid(variable ~ .) + 
+  geom_line(size=0.5) + 
+  scale_colour_manual(values = c("dodger blue","#ff8d1e")) + guides(colour=FALSE) + 
+  ylim(-2,10) + 
+  ylab(" ") + 
+  xlab("Time (ms)") + 
+  ggtitle("LFP time series") + 
+  theme(plot.title = element_text(hjust = 0.5, size=fontSize),
+        strip.text.y = element_text(size=fontSize),
+        axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize-2),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize))
+
+ps3a = p1b
+# ggsave(filename = file.path(figpath,sprintf("SuppFig3A.pdf",fstem_oof)),plot=p1b)
+p1b
+
+# Supp Fig 3B -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+HRF["variable"] <- 'HRF'
+fft_HRF["variable"] <- 'fft_HRF'
+fft_HPF["variable"] <- 'fft_HPF'
+
+merged_data_2 <- rbind(fft_HRF,fft_HPF)
+
+p1 = ggplot()
+p2 = ggplot()
+
+p1 = p1 + geom_line(data = HRF, aes(x = time, y = HRF, colour = 'black'),size = 1) 
+p2 = p2 + geom_line(data = merged_data_2, aes(x = fx, y = PSD, colour = variable),size = 1) 
+
+p1 = p1 + xlab("Time (sec)") + ggtitle("HRF")
+p1 = p1 + theme(plot.title = element_text(hjust = 0.5)) + guides(color=FALSE)
+
+p2 = p2 + xlab("Frequency (Hz)") + ggtitle("FFTs of convolution kernels")
+p2 = p2 + theme(plot.title = element_text(hjust = 0.5)) + guides(color=FALSE)
+
+# p1 = p1 + theme(legend.title = element_blank(),legend.position = c(0.85, 0.4),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p2 = p2 + theme(legend.title = element_blank(),legend.position = c(0.85, 0.4),legend.text = element_text(size=fontSize),legend.text.align = 0)
+
+p1 = p1 + scale_colour_manual(values = c("black"))
+p2 = p2 + scale_colour_manual(values = c("red","blue"))#, labels = c("HPF","HRF"))
+
+p2 = p2 + scale_x_log10() + scale_y_log10()
+
+p1 = p1 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_blank(),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+p2 = p2 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_blank(),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+ps3b = (p1 / p2)
+# ggsave(filename = file.path(figpath,sprintf("SuppFig3B.pdf",fstem_oof)),ps3b)
+ps3b
+
+# Supp Fig 3C -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+PSD_1["variable"] <- 'PSD 1'
+PSD_2["variable"] <- 'PSD 2'
+PSD_slope_1_lf["variable"] <- 'PSD_slope_1_lf'
+PSD_slope_1_hf["variable"] <- 'PSD_slope_1_hf'
+PSD_slope_2_lf["variable"] <- 'PSD_slope_2_lf'
+PSD_slope_2_hf["variable"] <- 'PSD_slope_2_hf'
+
+merged_data_1 <- rbind(PSD_1,PSD_2)
+
+p = ggplot()
+p = p + geom_line(data = merged_data_1, aes(x = fx, y = PSD, colour = variable),size = 1) 
+p = p + geom_line(data = PSD_slope_1_lf, aes(x = fx, y = PSD, colour = "black"),size = 0.5,linetype = "dashed") 
+p = p + geom_line(data = PSD_slope_1_hf, aes(x = fx, y = PSD, colour = "black"),size = 0.5,linetype = "dashed") 
+p = p + geom_line(data = PSD_slope_2_lf, aes(x = fx, y = PSD, colour = "black"),size = 0.5,linetype = "dashed") 
+p = p + geom_line(data = PSD_slope_2_hf, aes(x = fx, y = PSD, colour = "black"),size = 0.5,linetype = "dashed") 
+
+p = p + xlab("Frequency (Hz)")+ ylab( expression(paste( mV^2/Hz)) ) + ggtitle("LFP PSD")
+p = p + theme(plot.title = element_text(hjust = 0.5))
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.25, 0.25),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("dashed","solid","solid"),size=c(0.5,1,1))))
+p = p + guides(colour = FALSE)
+p = p + scale_colour_manual(values = c("black","dodger blue","#ff8d1e"))#,labels = legend_labels_PSD)
+p = p + scale_x_log10() + scale_y_log10()
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+ps3c = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig3C.pdf",fstem_oof)))
+p
+
+# Supp Fig 3D -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+BOLD_1["variable"] <- 'BOLD_1'
+BOLD_2["variable"] <- 'BOLD_2'
+
+p1 = ggplot()
+p2 = ggplot()
+
+p1 = p1 + geom_line(data = BOLD_1, aes(x = time, y = BOLD, colour = variable),size = 1)
+p2 = p2 + geom_line(data = BOLD_2, aes(x = time, y = BOLD, colour = variable),size = 1)
+
+p1 = p1  + xlab("Time (s)") + ggtitle("Simulated BOLD signals") + ylim(-2,1) + guides(colour=FALSE)
+p1 = p1 + theme(plot.title = element_text(hjust = 0.5))
+
+p2 = p2 + xlab("Time (s)") + ylim(-2,1) + guides(colour=FALSE)
+p2 = p2 + theme(plot.title = element_text(hjust = 0.5))
+
+# p1 = p1 + theme(legend.title = element_blank(),legend.position = c(0.85, 0.25),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p2 = p2 + theme(legend.title = element_blank(),legend.position = c(0.85, 0.25),legend.text = element_text(size=fontSize),legend.text.align = 0)
+
+p1 = p1 + scale_colour_manual(values = c("dodger blue"),labels = c(expression(g == 6.3)))
+p2 = p2 + scale_colour_manual(values = c("#ff8d1e"),labels = c(expression(g == 13.4)))
+
+p1 = p1 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_blank(),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+p2 = p2 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_blank(),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_blank())
+
+ps3d = (p1 / p2)
+# ggsave(filename = file.path(figpath,sprintf("SuppFig3D.pdf",fstem_oof)),ps3d)
+ps3d
+
+# Supp Fig 3E -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+fft_BOLD_1_HPF_No["variable"] <- 'fft_BOLD_1_HPF_No'
+fft_BOLD_2_HPF_No["variable"] <- 'fft_BOLD_2_HPF_No'
+
+merged_data <- rbind(fft_BOLD_1_HPF_No,fft_BOLD_2_HPF_No)
+
+p1 = ggplot()
+
+p1 = p1 + geom_line(data = merged_data, aes(x = fx, y = PSD, colour = variable),size = 1)
+p1 = p1 + xlab("Frequency (Hz)")
+p1 = p1 + ylab("Normalized FFTs of BOLD signals")
+p1 = p1 + ggtitle("Without high-pass filter")
+p1 = p1 + theme(plot.title = element_text(hjust = 0.5)) + guides(colour=FALSE)
+# p1 = p1 + theme(legend.title = element_blank(),legend.position = c(0.75, 0.65),legend.text = element_text(size=fontSize),legend.text.align = 0)
+p1 = p1 + scale_colour_manual(values = c("dodger blue","#ff8d1e"),labels = c(expression(g == 6.3),expression(g == 13.4)))
+
+p1 = p1 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+ps3e = p1
+# ggsave(filename = file.path(figpath,sprintf("SuppFig3E.pdf",fstem_oof)),plot=ps3d)
+p1
+
+# Supp Fig 3F -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+fft_BOLD_1_HPF_Yes["variable"] <- 'fft_BOLD_1_HPF_Yes'
+fft_BOLD_2_HPF_Yes["variable"] <- 'fft_BOLD_2_HPF_Yes'
+
+merged_data <- rbind(fft_BOLD_1_HPF_Yes,fft_BOLD_2_HPF_Yes)
+
+p1 = ggplot()
+
+p1 = p1 + geom_line(data = merged_data, aes(x = fx, y = PSD, colour = variable),size = 1)
+p1 = p1 + xlab("Frequency (Hz)") + ylab("Normalized FFTs of BOLD signals")
+p1 = p1 + ggtitle("With high-pass filter")
+p1 = p1 + theme(plot.title = element_text(hjust = 0.5)) + guides(colour=FALSE)
+# p1 = p1 + theme(legend.title = element_blank(),legend.position = c(0.75, 0.65),legend.text = element_text(size=fontSize),legend.text.align = 0)
+p1 = p1 + scale_colour_manual(values = c("dodger blue","#ff8d1e"),labels = c(expression(g == 6.3),expression(g == 13.4)))
+
+p1 = p1 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+ps3f = p1
+# ggsave(filename = file.path(figpath,sprintf("SuppFig3F.pdf",fstem_oof)),plot=p1)
+p1
+
+# Put plots together
+p_final = (ps3a | ps3b | ps3c) / (ps3d | ps3e | ps3f)
+ggsave(filename = file.path(figpath,sprintf("SuppFig3.pdf",fstem_oof)), plot=p_final)
+p_final
+```
+
+# Supp Figure 4
+```{r, warning=FALSE, message=FALSE}
+# Global properties of plots
+fontSize = 8
+fstem_oof = "oof"
+
+# Load data
+# H values
+BOLD_H_g_rate_1_Magri_kernel_No_HPF = read.csv(file.path(datapath,"BOLD_H_g_rate_1.5_Magri_kernel_No_HPF.csv"))
+BOLD_H_g_rate_2_Magri_kernel_No_HPF = read.csv(file.path(datapath,"BOLD_H_g_rate_2.0_Magri_kernel_No_HPF.csv"))
+BOLD_H_g_rate_1_Can_kernel_No_HPF = read.csv(file.path(datapath,"BOLD_H_g_rate_1.5_Can_kernel_No_HPF.csv"))
+BOLD_H_g_rate_2_Can_kernel_No_HPF = read.csv(file.path(datapath,"BOLD_H_g_rate_2.0_Can_kernel_No_HPF.csv"))
+BOLD_H_g_rate_1_Can_kernel_Yes_HPF = read.csv(file.path(datapath,"BOLD_H_g_rate_1.5_Can_kernel_Yes_HPF.csv"))
+BOLD_H_g_rate_2_Can_kernel_Yes_HPF = read.csv(file.path(datapath,"BOLD_H_g_rate_2.0_Can_kernel_Yes_HPF.csv"))
+
+# Correlation of LFP power and BOLD
+corr_matrix_Magri_kernel_No_HPF = read.csv(file.path(datapath,"corr_matrix_Magri_kernel_No_HPF.csv"))
+alpha_band_Magri_kernel_No_HPF = read.csv(file.path(datapath,"alpha_band_Magri_kernel_No_HPF.csv"))
+beta_band_Magri_kernel_No_HPF = read.csv(file.path(datapath,"beta_band_Magri_kernel_No_HPF.csv"))
+gamma_band_Magri_kernel_No_HPF = read.csv(file.path(datapath,"gamma_band_Magri_kernel_No_HPF.csv"))
+LFP_band_Magri_kernel_No_HPF = read.csv(file.path(datapath,"LFP_band_Magri_kernel_No_HPF.csv"))
+
+corr_matrix_Can_kernel_No_HPF = read.csv(file.path(datapath,"corr_matrix_Can_kernel_No_HPF.csv"))
+alpha_band_Can_kernel_No_HPF = read.csv(file.path(datapath,"alpha_band_Can_kernel_No_HPF.csv"))
+beta_band_Can_kernel_No_HPF = read.csv(file.path(datapath,"beta_band_Can_kernel_No_HPF.csv"))
+gamma_band_Can_kernel_No_HPF = read.csv(file.path(datapath,"gamma_band_Can_kernel_No_HPF.csv"))
+LFP_band_Can_kernel_No_HPF = read.csv(file.path(datapath,"LFP_band_Can_kernel_No_HPF.csv"))
+
+corr_matrix_Can_kernel_Yes_HPF = read.csv(file.path(datapath,"corr_matrix_Can_kernel_Yes_HPF.csv"))
+alpha_band_Can_kernel_Yes_HPF = read.csv(file.path(datapath,"alpha_band_Can_kernel_Yes_HPF.csv"))
+beta_band_Can_kernel_Yes_HPF = read.csv(file.path(datapath,"beta_band_Can_kernel_Yes_HPF.csv"))
+gamma_band_Can_kernel_Yes_HPF = read.csv(file.path(datapath,"gamma_band_Can_kernel_Yes_HPF.csv"))
+LFP_band_Can_kernel_Yes_HPF = read.csv(file.path(datapath,"LFP_band_Can_kernel_Yes_HPF.csv"))
+
+cLims = c(-0.06,0.28)
+cMid = 0.125
+# cLims = round(range(c(corr_matrix_Magri_kernel_No_HPF$r,
+#                 corr_matrix_Can_kernel_No_HPF$r,
+#                 corr_matrix_Can_kernel_Yes_HPF$r)),2)
+# Supp Fig 4A -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+
+colnames(corr_matrix_Magri_kernel_No_HPF) <- c('X.1','X','Y','r')
+
+# jet colormap
+jet.colors <- colorRampPalette(c("#00007F", "blue", "#007FFF", "cyan", "#7FFF7F", "yellow", "#FF7F00", "red", "#7F0000"))
+
+p = ggplot(corr_matrix_Magri_kernel_No_HPF, aes(X, Y, fill= r)) + geom_tile()
+# p = p + scale_fill_gradientn(colors = jet.colors(7),breaks = seq(0,0.25,0.05))
+# p = p + scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), 
+                             # breaks = seq(0,0.25,0.05))
+p = p + scale_fill_gradient2(low="blue", mid="white", high="red",
+                             midpoint=cMid, limits=cLims)
+p = p + xlab("Delay (s)") + ylab("Frequency (Hz)")+ ggtitle("Correlation between LFP power and BOLD")
+p = p + theme(plot.title = element_text(hjust = 0.5))
+p = p + scale_y_reverse(breaks = round(seq(100, 0, by = -20),1))
+
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.title = element_text(size=fontSize,hjust=0.2),
+        legend.key.size = unit(3, "mm"))
+
+ps4a = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig4A.pdf",fstem_oof)))
+p
+
+# Supp Fig 4B -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+alpha_band_Magri_kernel_No_HPF["variable"] <- 'alpha'
+beta_band_Magri_kernel_No_HPF["variable"] <- 'beta'
+gamma_band_Magri_kernel_No_HPF["variable"] <- 'gamma'
+LFP_band_Magri_kernel_No_HPF["variable"] <- 'LFP'
+
+merged_data <- rbind(alpha_band_Magri_kernel_No_HPF,
+                     beta_band_Magri_kernel_No_HPF,
+                     gamma_band_Magri_kernel_No_HPF,
+                     LFP_band_Magri_kernel_No_HPF)
+
+p = ggplot()
+p = p + geom_line(data = merged_data, aes(x = time, y = band, colour = variable),size = 0.5)
+p = p + xlab("Delay (s)") + ylab("Correlation") + ggtitle("Correlation in selected frequency bands")
+p = p + theme(plot.title = element_text(hjust = 0.5)) + guides(colour=FALSE)
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.9, 0.85),legend.text = element_text(size=fontSize),legend.text.align = 0)
+p = p + scale_colour_manual(values = c("#006400","red","blue","black"))
+
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+ps4b = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig4B.pdf",fstem_oof)))
+p
+
+# Supp Fig 4C -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+
+# Box plot
+box1 <- data.frame(seq(1,60,1),seq(1,60,1))
+box2 <- data.frame(seq(1,60,1),seq(1,60,1))
+
+# Clustering of H in 3 groups
+box1[1:20,2] = BOLD_H_g_rate_1_Magri_kernel_No_HPF[seq(0,60,3),3]
+box1[21:40,2] = BOLD_H_g_rate_1_Magri_kernel_No_HPF[seq(1,60,3),3]
+box1[41:60,2] = BOLD_H_g_rate_1_Magri_kernel_No_HPF[seq(2,60,3),3]
+box1[1:20,1] = format(round(mean(BOLD_H_g_rate_1_Magri_kernel_No_HPF[seq(0,60,3),2]), 2), nsmall = 2)
+box1[21:40,1] = format(round(mean(BOLD_H_g_rate_1_Magri_kernel_No_HPF[seq(1,60,3),2]), 2), nsmall = 2)
+box1[41:60,1] = format(round(mean(BOLD_H_g_rate_1_Magri_kernel_No_HPF[seq(2,60,3),2]), 2), nsmall = 2)
+colnames(box1) <- c("var","metric")
+
+box2[1:20,2] = BOLD_H_g_rate_2_Magri_kernel_No_HPF[seq(0,60,3),3]
+box2[21:40,2] = BOLD_H_g_rate_2_Magri_kernel_No_HPF[seq(1,60,3),3]
+box2[41:60,2] = BOLD_H_g_rate_2_Magri_kernel_No_HPF[seq(2,60,3),3]
+box2[1:20,1] = format(round(mean(BOLD_H_g_rate_2_Magri_kernel_No_HPF[seq(0,60,3),2]), 2), nsmall = 2)
+box2[21:40,1] = format(round(mean(BOLD_H_g_rate_2_Magri_kernel_No_HPF[seq(1,60,3),2]), 2), nsmall = 2)
+box2[41:60,1] = format(round(mean(BOLD_H_g_rate_2_Magri_kernel_No_HPF[seq(2,60,3),2]), 2), nsmall = 2)
+colnames(box2) <- c("var","metric")
+
+# boxplot
+p2 <-ggplot(box1, aes(x = fct_reorder(var,metric,.desc=TRUE), y = metric, colour = var)) + 
+  geom_boxplot(fill = NA, outlier.shape = NA)
+# Box plot with dot plot
+p2 = p2 + geom_jitter(shape=16, position=position_jitter(0.2))
+# #  Add p-value
+# p2 = p2 + stat_compare_means(method = "anova",size = 5)
+# # Annotate external rate
+# p2 = p2 + annotate(geom="text", x=3, y=1.8, label="1.5 sp/s", color="red", size = 6)
+
+# Other props.
+p2 = p2 + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("H") + ylim(1.5,1.85) + ggtitle("1.5 sp/s")
+p2 = p2 + theme(plot.title = element_text(hjust = 0.5))
+#p2 = p2 + scale_y_discrete(breaks = round(seq(1.4, 1.7, by = 0.1),1))
+p2 = p2 + scale_color_manual(values=c("#808000", "#808000", "#808000"))
+p2 = p2 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+# boxplot
+p3 <-ggplot(box2, aes(x = fct_reorder(var,metric,.desc=TRUE), y = metric, colour = var)) + 
+  geom_boxplot(fill = NA, outlier.shape = NA)
+# Box plot with dot plot
+p3 = p3 + geom_jitter(shape=16, position=position_jitter(0.2))
+# #  Add p-value
+# p3 = p3 + stat_compare_means(method = "anova",size = 5)
+# # Annotate external rate
+# p3 = p3 + annotate(geom="text", x=3, y=1.8, label="2 sp/s", color="red", size = 6)
+
+# Other props.
+p3 = p3 + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("H") + ylim(1.5,1.85)+ ggtitle("2 sp/s")
+p3 = p3 + theme(plot.title = element_text(hjust = 0.5))
+#p3 = p3 + scale_y_discrete(breaks = round(seq(1.4, 1.7, by = 0.1),1))
+p3 = p3 + scale_color_manual(values=c("#FA8072", "#FA8072", "#FA8072"))
+p3 = p3 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+ps4c = (p2 | p3)
+# ggsave(filename = file.path(figpath,sprintf("SuppFig4C.pdf",fstem_oof)),plot=ps4c)
+ps4c
+
+# Supp Fig 4D -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+
+colnames(corr_matrix_Can_kernel_No_HPF) <- c('X.1','X','Y','r')
+
+# jet colormap
+jet.colors <- colorRampPalette(c("#00007F", "blue", "#007FFF", "cyan", "#7FFF7F", "yellow", "#FF7F00", "red", "#7F0000"))
+
+p = ggplot(corr_matrix_Can_kernel_No_HPF, aes(X, Y, fill= r)) + geom_tile()
+# p = p + scale_fill_gradientn(colors = jet.colors(7),breaks = seq(0,0.25,0.05))
+# p = p + scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100),
+#                              breaks = seq(0,0.25,0.05))
+p = p + scale_fill_gradient2(low="blue", mid="white", high="red", 
+                       midpoint=cMid, limits=cLims)
+p = p + xlab("Delay (s)") + ylab("Frequency (Hz)")+ ggtitle("Correlation between LFP power and BOLD")
+p = p + theme(plot.title = element_text(hjust = 0.5))
+p = p + scale_y_reverse(breaks = round(seq(100, 0, by = -20),1))
+
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.title = element_text(size=fontSize,hjust=0.2),
+        legend.key.size = unit(3, "mm"))
+
+ps4d = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig4D.pdf",fstem_oof)))
+p
+
+#Supp Fig 4E ------------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+alpha_band_Can_kernel_No_HPF["variable"] <- 'alpha'
+beta_band_Can_kernel_No_HPF["variable"] <- 'beta'
+gamma_band_Can_kernel_No_HPF["variable"] <- 'gamma'
+LFP_band_Can_kernel_No_HPF["variable"] <- 'LFP'
+
+merged_data <- rbind(alpha_band_Can_kernel_No_HPF,
+                     beta_band_Can_kernel_No_HPF,
+                     gamma_band_Can_kernel_No_HPF,
+                     LFP_band_Can_kernel_No_HPF)
+
+p = ggplot()
+p = p + geom_line(data = merged_data, aes(x = time, y = band, colour = variable),size = 0.5)
+p = p + xlab("Delay (s)") + ylab("Correlation") + ggtitle("Correlation in selected frequency bands")
+p = p + theme(plot.title = element_text(hjust = 0.5)) + guides(colour=FALSE)
+p = p + theme(legend.title = element_blank(),legend.position = c(0.9, 0.85),legend.text = element_text(size=fontSize),legend.text.align = 0)
+p = p + scale_colour_manual(values = c("#006400","red","blue","black"))
+
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+ps4e = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig4E.pdf",fstem_oof)))
+p
+
+# Supp Fig 4F -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+
+# Box plot
+box1 <- data.frame(seq(1,60,1),seq(1,60,1))
+box2 <- data.frame(seq(1,60,1),seq(1,60,1))
+
+# Clustering of H in 3 groups
+box1[1:20,2] = BOLD_H_g_rate_1_Can_kernel_No_HPF[seq(0,60,3),3]
+box1[21:40,2] = BOLD_H_g_rate_1_Can_kernel_No_HPF[seq(1,60,3),3]
+box1[41:60,2] = BOLD_H_g_rate_1_Can_kernel_No_HPF[seq(2,60,3),3]
+box1[1:20,1] = format(round(mean(BOLD_H_g_rate_1_Can_kernel_No_HPF[seq(0,60,3),2]), 2), nsmall = 2)
+box1[21:40,1] = format(round(mean(BOLD_H_g_rate_1_Can_kernel_No_HPF[seq(1,60,3),2]), 2), nsmall = 2)
+box1[41:60,1] = format(round(mean(BOLD_H_g_rate_1_Can_kernel_No_HPF[seq(2,60,3),2]), 2), nsmall = 2)
+colnames(box1) <- c("var","metric")
+
+box2[1:20,2] = BOLD_H_g_rate_2_Can_kernel_No_HPF[seq(0,60,3),3]
+box2[21:40,2] = BOLD_H_g_rate_2_Can_kernel_No_HPF[seq(1,60,3),3]
+box2[41:60,2] = BOLD_H_g_rate_2_Can_kernel_No_HPF[seq(2,60,3),3]
+box2[1:20,1] = format(round(mean(BOLD_H_g_rate_2_Can_kernel_No_HPF[seq(0,60,3),2]), 2), nsmall = 2)
+box2[21:40,1] = format(round(mean(BOLD_H_g_rate_2_Can_kernel_No_HPF[seq(1,60,3),2]), 2), nsmall = 2)
+box2[41:60,1] = format(round(mean(BOLD_H_g_rate_2_Can_kernel_No_HPF[seq(2,60,3),2]), 2), nsmall = 2)
+colnames(box2) <- c("var","metric")
+
+# boxplot
+p2 <-ggplot(box1, aes(x = fct_reorder(var,metric,.desc=TRUE), y = metric, colour = var)) + 
+  geom_boxplot(fill = NA, outlier.shape = NA)
+# Box plot with dot plot
+p2 = p2 + geom_jitter(shape=16, position=position_jitter(0.2))
+# #  Add p-value
+# p2 = p2 + stat_compare_means(method = "anova",size = 5)
+# # Annotate external rate
+# p2 = p2 + annotate(geom="text", x=3, y=1.9, label="1.5 sp/s", color="red", size = 6)
+
+# Other props.
+p2 = p2 + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("H") + ylim(1.5,1.95) + ggtitle("1.5 sp/s")
+p2 = p2 + theme(plot.title = element_text(hjust = 0.5))
+#p2 = p2 + scale_y_discrete(breaks = round(seq(1.4, 1.7, by = 0.1),1))
+p2 = p2 + scale_color_manual(values=c("#808000", "#808000", "#808000"))
+p2 = p2 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+# boxplot
+p3 <-ggplot(box2, aes(x = fct_reorder(var,metric,.desc=TRUE), y = metric, colour = var)) + 
+  geom_boxplot(fill = NA, outlier.shape = NA)
+# Box plot with dot plot
+p3 = p3 + geom_jitter(shape=16, position=position_jitter(0.2))
+# #  Add p-value
+# p3 = p3 + stat_compare_means(method = "anova",size = 5)
+# # Annotate external rate
+# p3 = p3 + annotate(geom="text", x=3, y=1.9, label="2 sp/s", color="red", size = 6)
+
+# Other props.
+p3 = p3 + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("H") + ylim(1.5,1.95) + ggtitle("2 sp/s")
+p3 = p3 + theme(plot.title = element_text(hjust = 0.5))
+#p3 = p3 + scale_y_discrete(breaks = round(seq(1.4, 1.7, by = 0.1),1))
+p3 = p3 + scale_color_manual(values=c("#FA8072", "#FA8072", "#FA8072"))
+p3 = p3 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+ps4f = (p2 | p3)
+# ggsave(filename = file.path(figpath,sprintf("SuppFig4F.pdf",fstem_oof)),plot=ps4f)
+ps4f
+
+# Supp Fig 4G -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+
+colnames(corr_matrix_Can_kernel_Yes_HPF) <- c('X.1','X','Y','r')
+
+# jet colormap
+jet.colors <- colorRampPalette(c("#00007F", "blue", "#007FFF", "cyan", "#7FFF7F", "yellow", "#FF7F00", "red", "#7F0000"))
+
+p = ggplot(corr_matrix_Can_kernel_Yes_HPF, aes(X, Y, fill= r)) + geom_tile()
+# p = p + scale_fill_gradientn(colors = jet.colors(7), breaks = seq(0,0.25,0.05))
+# p = p + scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100),
+#                              breaks = seq(0,0.25,0.05))
+p = p + scale_fill_gradient2(low="blue", mid="white", high="red", 
+                       midpoint=cMid, limits=cLims)
+p = p + xlab("Delay (s)") + ylab("Frequency (Hz)")+ ggtitle("Correlation between LFP power and BOLD")
+p = p + theme(plot.title = element_text(hjust = 0.5))
+p = p + scale_y_reverse(breaks = round(seq(100, 0, by = -20),1))
+
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.title = element_text(size=fontSize,hjust=0.2),
+        legend.key.size = unit(3, "mm"))
+
+ps4g = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig4G.pdf",fstem_oof)))
+p
+
+# Supp Fig 4H -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+alpha_band_Can_kernel_Yes_HPF["variable"] <- 'alpha'
+beta_band_Can_kernel_Yes_HPF["variable"] <- 'beta'
+gamma_band_Can_kernel_Yes_HPF["variable"] <- 'gamma'
+LFP_band_Can_kernel_Yes_HPF["variable"] <- 'LFP'
+
+merged_data <- rbind(alpha_band_Can_kernel_Yes_HPF,
+                     beta_band_Can_kernel_Yes_HPF,
+                     gamma_band_Can_kernel_Yes_HPF,
+                     LFP_band_Can_kernel_Yes_HPF)
+
+p = ggplot()
+p = p + geom_line(data = merged_data, aes(x = time, y = band, colour = variable),size = 0.5)
+p = p + xlab("Delay (s)") + ylab("Correlation") + ggtitle("Correlation in selected frequency bands")
+p = p + theme(plot.title = element_text(hjust = 0.5)) + guides(colour=FALSE)
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.9, 0.85),legend.text = element_text(size=fontSize),legend.text.align = 0)
+p = p + scale_colour_manual(values = c("#006400","red","blue","black"))
+
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+ps4h = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig4H.pdf",fstem_oof)))
+p
+
+# Supp Fig 4I -----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+
+# Box plot
+box1 <- data.frame(seq(1,60,1),seq(1,60,1))
+box2 <- data.frame(seq(1,60,1),seq(1,60,1))
+
+# Clustering of H in 3 groups
+box1[1:20,2] = BOLD_H_g_rate_1_Can_kernel_Yes_HPF[seq(0,60,3),3]
+box1[21:40,2] = BOLD_H_g_rate_1_Can_kernel_Yes_HPF[seq(1,60,3),3]
+box1[41:60,2] = BOLD_H_g_rate_1_Can_kernel_Yes_HPF[seq(2,60,3),3]
+box1[1:20,1] = format(round(mean(BOLD_H_g_rate_1_Can_kernel_Yes_HPF[seq(0,60,3),2]), 2), nsmall = 2)
+box1[21:40,1] = format(round(mean(BOLD_H_g_rate_1_Can_kernel_Yes_HPF[seq(1,60,3),2]), 2), nsmall = 2)
+box1[41:60,1] = format(round(mean(BOLD_H_g_rate_1_Can_kernel_Yes_HPF[seq(2,60,3),2]), 2), nsmall = 2)
+colnames(box1) <- c("var","metric")
+
+box2[1:20,2] = BOLD_H_g_rate_2_Can_kernel_Yes_HPF[seq(0,60,3),3]
+box2[21:40,2] = BOLD_H_g_rate_2_Can_kernel_Yes_HPF[seq(1,60,3),3]
+box2[41:60,2] = BOLD_H_g_rate_2_Can_kernel_Yes_HPF[seq(2,60,3),3]
+box2[1:20,1] = format(round(mean(BOLD_H_g_rate_2_Can_kernel_Yes_HPF[seq(0,60,3),2]), 2), nsmall = 2)
+box2[21:40,1] = format(round(mean(BOLD_H_g_rate_2_Can_kernel_Yes_HPF[seq(1,60,3),2]), 2), nsmall = 2)
+box2[41:60,1] = format(round(mean(BOLD_H_g_rate_2_Can_kernel_Yes_HPF[seq(2,60,3),2]), 2), nsmall = 2)
+colnames(box2) <- c("var","metric")
+
+# boxplot
+p2 <-ggplot(box1, aes(x = fct_reorder(var,metric,.desc=TRUE), y = metric, colour = var)) + 
+  geom_boxplot(fill = NA, outlier.shape = NA)
+# Box plot with dot plot
+p2 = p2 + geom_jitter(shape=16, position=position_jitter(0.2))
+# #  Add p-value
+# p2 = p2 + stat_compare_means(method = "anova",size = 5)
+# # Annotate external rate
+# p2 = p2 + annotate(geom="text", x=3, y=1.9, label="1.5 sp/s", color="red", size = 6)
+
+# Other props.
+p2 = p2 + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("H") + ylim(1.5,1.85) + ggtitle("1.5 sp/s")
+p2 = p2 + theme(plot.title = element_text(hjust = 0.5))
+#p2 = p2 + scale_y_discrete(breaks = round(seq(1.4, 1.7, by = 0.1),1))
+p2 = p2 + scale_color_manual(values=c("#808000", "#808000", "#808000"))
+p2 = p2 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+# boxplot
+p3 <-ggplot(box2, aes(x = fct_reorder(var,metric,.desc=TRUE), y = metric, colour = var)) + 
+  geom_boxplot(fill = NA, outlier.shape = NA)
+# Box plot with dot plot
+p3 = p3 + geom_jitter(shape=16, position=position_jitter(0.2))
+# #  Add p-value
+# p3 = p3 + stat_compare_means(method = "anova",size = 5)
+# # Annotate external rate
+# p3 = p3 + annotate(geom="text", x=3, y=1.9, label="2 sp/s", color="red", size = 6)
+
+# Other props.
+p3 = p3 + xlab( expression(paste( g == g[I]/g[E])) ) + ylab("H") + ylim(1.5,1.85) + ggtitle("2 sp/s")
+p3 = p3 + theme(plot.title = element_text(hjust = 0.5))
+#p3 = p3 + scale_y_discrete(breaks = round(seq(1.4, 1.7, by = 0.1),1))
+p3 = p3 + scale_color_manual(values=c("#FA8072", "#FA8072", "#FA8072"))
+p3 = p3 + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+ps4i = (p2 | p3)
+# ggsave(filename = file.path(figpath,sprintf("SuppFig4I.pdf",fstem_oof)),plot=ps4f)
+ps4i
+
+# Put plots together
+p_final = ((ps4a | ps4b | ps4c) + plot_layout(widths=c(1,1,2.25))) / 
+  ((ps4d | ps4e | ps4f) + plot_layout(widths=c(1,1,2.25))) / 
+  ((ps4g | ps4h | ps4i) + plot_layout(widths=c(1,1,2.25))) 
+ggsave(filename = file.path(figpath,sprintf("SuppFig4.pdf",fstem_oof)), plot=p_final)
+p_final
+```
+
+
+# Supp Figure 5
+```{r, warning=FALSE, message=FALSE}
+# Global properties of plots
+fontSize = 8
+fstem_oof = "oof"
+
+legend_labels_slope = c(expression(paste(nu[0] == 1.5," sp/s")),
+                        expression(paste(nu[0] == 2," sp/s")),
+                        'Baseline')
+
+# Load data
+# Vth
+# LFP slopes 
+lf_slopes_vth_rate_1 = read.csv(file.path(datapath,"lf_slopes_vth_rate_1.5.csv"))
+lf_slopes_vth_rate_2 = read.csv(file.path(datapath,"lf_slopes_vth_rate_2.0.csv"))
+hf_slopes_vth_rate_1 = read.csv(file.path(datapath,"hf_slopes_vth_rate_1.5.csv"))
+hf_slopes_vth_rate_2 = read.csv(file.path(datapath,"hf_slopes_vth_rate_2.0.csv"))
+
+# EL
+# LFP slopes 
+lf_slopes_EL_rate_1 = read.csv(file.path(datapath,"lf_slopes_EL_rate_1.5.csv"))
+lf_slopes_EL_rate_2 = read.csv(file.path(datapath,"lf_slopes_EL_rate_2.0.csv"))
+hf_slopes_EL_rate_1 = read.csv(file.path(datapath,"hf_slopes_EL_rate_1.5.csv"))
+hf_slopes_EL_rate_2 = read.csv(file.path(datapath,"hf_slopes_EL_rate_2.0.csv"))
+
+# Vth
+fooof_ap_vth_rate_1 = read.csv(file.path(datapath,"fooof_ap_vth_rate_1.5.csv"))
+fooof_ap_vth_rate_2 = read.csv(file.path(datapath,"fooof_ap_vth_rate_2.0.csv"))
+
+# EL
+fooof_ap_EL_rate_1 = read.csv(file.path(datapath,"fooof_ap_EL_rate_1.5.csv"))
+fooof_ap_EL_rate_2 = read.csv(file.path(datapath,"fooof_ap_EL_rate_2.0.csv"))
+
+# Baseline lines
+baseline_vth_slopes_1 <- data.frame("var" = -52,"metric"=seq(-1, 1, length.out=100),"variable"='Baseline')
+baseline_vth_slopes_2 <- data.frame("var" = -52,"metric"=seq(-2.75, -1, length.out=100),"variable"='Baseline')
+
+baseline_EL_slopes_1 <- data.frame("var" = -70,"metric"=seq(-1, 1, length.out=100),"variable"='Baseline')
+baseline_EL_slopes_2 <- data.frame("var" = -70,"metric"=seq(-2.75, -1, length.out=100),"variable"='Baseline')
+
+baseline_vth_slopes <- data.frame("var" = -52,"metric"=seq(-1.25, 0.5, length.out=100),"variable"='Baseline')
+baseline_EL_slopes <- data.frame("var" = -70,"metric"=seq(-1.25, 0.5, length.out=100),"variable"='Baseline')
+
+# Supp Fig 5A1 ----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+lf_slopes_vth_rate_1["variable"] <- '1.5 spikes/s'
+lf_slopes_vth_rate_2["variable"] <- '2 spikes/s'
+merged_data <- rbind(lf_slopes_vth_rate_1,lf_slopes_vth_rate_2)
+
+p = ggplot()
+p = p + geom_point(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        geom_smooth(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        guides(data = merged_data, aes(x = var, y = metric, colour = FALSE))
+p = p + geom_line(data = baseline_vth_slopes_1, aes(x = var, y = metric, colour = variable),linetype = "dotdash") +
+        guides(data = baseline_vth_slopes_1, aes(x = var, y = metric, colour = FALSE))
+p = p + scale_x_reverse(breaks = round(seq(-51.5, -53, by = -0.5),1))
+p = p + xlab( expression(paste( V[th]," (mV)")) ) + ylab("1/f slope") + ggtitle("Low-frequencies <30 Hz")
+p = p + theme(plot.title = element_text(hjust = 0.5)) + guides(colour=FALSE)
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.8, 0.2),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("solid","solid","dotdash"),size=c(1,1,1))))
+p = p + scale_colour_manual(values = c("#808000","#FA8072","black"),labels = legend_labels_slope)
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+ps5a1 = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig5A1.pdf",fstem_oof)))
+p
+
+# Supp Fig 5A2 ----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+hf_slopes_vth_rate_1["variable"] <- '1.5 spikes/s'
+hf_slopes_vth_rate_2["variable"] <- '2 spikes/s'
+merged_data <- rbind(hf_slopes_vth_rate_1,hf_slopes_vth_rate_2)
+
+p = ggplot()
+p = p + geom_point(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        geom_smooth(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        guides(data = merged_data, aes(x = var, y = metric, colour = FALSE))
+p = p + geom_line(data = baseline_vth_slopes_2, aes(x = var, y = metric, colour = variable),linetype = "dotdash") +
+        guides(data = baseline_vth_slopes_2, aes(x = var, y = metric, colour = FALSE))
+p = p + scale_x_reverse(breaks = round(seq(-51.5, -53, by = -0.5),1))
+p = p + xlab( expression(paste(  V[th]," (mV)")) ) + ylab("1/f slope") + ggtitle("High-frequencies >30 Hz")
+p = p + theme(plot.title = element_text(hjust = 0.5)) + guides(colour=FALSE)
+# p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("solid","solid","dotdash"),size=c(1,1,1))))
+p = p + scale_colour_manual(values = c("#808000","#FA8072","black"),labels = legend_labels_slope)
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+ps5a2 = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig5A2.pdf",fstem_oof)))
+p
+
+# Supp Fig 5A3 ----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+fooof_ap_vth_rate_1["variable"] <- '1.5 spikes/s'
+fooof_ap_vth_rate_2["variable"] <- '2 spikes/s'
+merged_data <- rbind(fooof_ap_vth_rate_1,fooof_ap_vth_rate_2)
+
+p = ggplot()
+p = p + geom_point(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        geom_smooth(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        guides(data = merged_data, aes(x = var, y = metric, colour = FALSE))
+p = p + geom_line(data = baseline_vth_slopes, aes(x = var, y = metric, colour = variable),linetype = "dotdash") +
+        guides(data = baseline_vth_slopes, aes(x = var, y = metric, colour = FALSE))
+p = p + scale_x_reverse(breaks = round(seq(-51.5, -53, by = -0.5),1))
+p = p + xlab( expression(paste( V[th]," (mV)")) ) + ylab("1/f slope") + ggtitle("Aperiodic slope")
+p = p + theme(plot.title = element_text(hjust = 0.5)) + guides(colour=FALSE)
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.8, 0.2),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("solid","solid","dotdash"),size=c(1,1,1))))
+p = p + scale_colour_manual(values = c("#808000","#FA8072",'black'),labels = legend_labels_slope)
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize))
+
+ps5a3 = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig5A3.pdf",fstem_oof)))
+p
+
+# Supp Fig 5B1 ----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+lf_slopes_EL_rate_1["variable"] <- '1.5 spikes/s'
+lf_slopes_EL_rate_2["variable"] <- '2 spikes/s'
+merged_data <- rbind(lf_slopes_EL_rate_1,lf_slopes_EL_rate_2)
+
+p = ggplot()
+p = p + geom_point(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        geom_smooth(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        guides(data = merged_data, aes(x = var, y = metric, colour = FALSE))
+p = p + geom_line(data = baseline_EL_slopes_1, aes(x = var, y = metric, colour = variable),linetype = "dotdash") +
+        guides(data = baseline_EL_slopes_1, aes(x = var, y = metric, colour = FALSE))
+# p = p + scale_x_reverse(breaks = round(seq(-51.5, -53, by = -0.5),1))
+p = p + xlab( expression(paste( E[L]," (mV)")) ) + ylab("1/f slope") + ggtitle("Low-frequencies <30 Hz")
+p = p + theme(plot.title = element_text(hjust = 0.5)) + guides(colour=FALSE)
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.8, 0.2),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("solid","solid","dotdash"),size=c(1,1,1))))
+p = p + scale_colour_manual(values = c("#808000","#FA8072","black"),labels = legend_labels_slope)
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+ps5b1 = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig5B1.pdf",fstem_oof)))
+p
+
+# Supp Fig 5B2 ----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+hf_slopes_EL_rate_1["variable"] <- '1.5 spikes/s'
+hf_slopes_EL_rate_2["variable"] <- '2 spikes/s'
+merged_data <- rbind(hf_slopes_EL_rate_1,hf_slopes_EL_rate_2)
+
+p = ggplot()
+p = p + geom_point(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        geom_smooth(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        guides(data = merged_data, aes(x = var, y = metric, colour = FALSE))
+p = p + geom_line(data = baseline_EL_slopes_2, aes(x = var, y = metric, colour = variable),linetype = "dotdash") +
+        guides(data = baseline_EL_slopes_2, aes(x = var, y = metric, colour = FALSE))
+# p = p + scale_x_reverse(breaks = round(seq(-51.5, -53, by = -0.5),1))
+p = p + xlab( expression(paste(  E[L]," (mV)")) ) + ylab("1/f slope") + ggtitle("High-frequencies >30 Hz")
+p = p + theme(plot.title = element_text(hjust = 0.5))
+# p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("solid","solid","dotdash"),size=c(1,1,1))))
+p = p + scale_colour_manual(values = c("#808000","#FA8072",'black'),labels = legend_labels_slope)
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = "none")
+
+ps5b2 = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig5B2.pdf",fstem_oof)))
+p
+
+# Supp Fig 5B3 ----------------------------------------------------------------
+labelidx2use = c(1,6,11,16,21)
+fooof_ap_EL_rate_1["variable"] <- '1.5 spikes/s'
+fooof_ap_EL_rate_2["variable"] <- '2 spikes/s'
+merged_data <- rbind(fooof_ap_EL_rate_1,fooof_ap_EL_rate_2)
+
+p = ggplot()
+p = p + geom_point(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        geom_smooth(data = merged_data, aes(x = var, y = metric, colour = variable)) +
+        guides(data = merged_data, aes(x = var, y = metric, colour = FALSE))
+p = p + geom_line(data = baseline_EL_slopes, aes(x = var, y = metric, colour = variable),linetype = "dotdash") +
+        guides(data = baseline_EL_slopes, aes(x = var, y = metric, colour = FALSE))
+#p = p + scale_x_reverse(breaks = round(seq(-51.5, -53, by = -0.5),1))
+p = p + xlab( expression(paste( E[L]," (mV)")) ) + ylab("1/f slope") + ggtitle("Aperiodic slope")
+p = p + theme(plot.title = element_text(hjust = 0.5)) + guides(colour=FALSE)
+# p = p + theme(legend.title = element_blank(),legend.position = c(0.8, 0.2),legend.text = element_text(size=fontSize),legend.text.align = 0)
+# p = p + guides(color = guide_legend(override.aes = list(shape= NA,linetype = c("solid","solid","dotdash"),size=c(1,1,1))))
+p = p + scale_colour_manual(values = c("#808000","#FA8072","black"),labels = legend_labels_slope)
+p = p + theme(axis.text.x = element_text(size=fontSize),
+        axis.text.y = element_text(size=fontSize),
+        axis.title.x = element_text(size=fontSize),
+        axis.title.y = element_text(size=fontSize),
+        strip.text.x = element_text(size=fontSize),
+        plot.title = element_text(size=fontSize),
+        legend.position = 'none')
+
+ps5b3 = p
+# ggsave(filename = file.path(figpath,sprintf("SuppFig5B3.pdf",fstem_oof)))
+p
+
+# Put plots together
+p_final = (ps5a1 | ps5a2 | ps5a3) / (ps5b1 | ps5b2 | ps5b3)
+ggsave(filename = file.path(figpath,sprintf("SuppFig5.pdf",fstem_oof)), plot=p_final)
+p_final
+```

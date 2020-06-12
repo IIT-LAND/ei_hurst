@@ -1,0 +1,117 @@
+---
+title: "Hurst PLS Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+```{r, warning=FALSE, message=FALSE}
+# load libraries you'll need
+library(easypackages)
+libraries("readxl","ggplot2","MASS","psych","here","heplots","ggseg","patchwork","knitr","matlabr")
+source(here("github_repo","code","cohens_d.R"))
+
+# FDR threshold to use
+fdr_thresh = 0.05
+
+# define paths
+codepath = here("github_repo","code")
+phenopath  = here("pheno")
+datapath = here("data")
+resultpath = here("pls_results")
+
+# load HCP annotations
+hcp_annot = read.delim(file.path(codepath, "GlasserHCP_annot.txt"))
+```
+
+Run MATLAB code to do PLS analysis
+
+```{r, warning=FALSE, message=FALSE}
+RUNMATLAB = FALSE
+if(RUNMATLAB){
+  code2run = sprintf("cd %s; C_3a_AIMS_Hurst_PLS;",codepath)
+  res_tmp = run_matlab_code(code2run)
+}
+```
+
+PLS analysis where the Y matrix is a contrast matrix that includes both main effects of sex and diagnosis, as well as the sex*diagnosis interaction.
+
+```{r, warning=FALSE, message=FALSE}
+data2plot = read.csv(file.path(resultpath,"pls_ALL_H_bootCI4plotting_LV1_ci95.csv"))
+
+p = ggplot(data = data2plot, aes(x = Effect, y = corr, colour = Effect))
+p = p + geom_pointrange(aes(ymin = lo_lim, ymax = up_lim))
+p = p + geom_linerange(data = data2plot, aes(ymin = lo_lim, ymax = up_lim))
+p = p + ylab("Correlation")
+p
+```
+
+PLS analysis on the specific sex*diagnosis contrast 
+
+```{r, warning=FALSE, message=FALSE}
+data2plot = read.csv(file.path(resultpath,"pls_SEXbyDX_H_brainBSR4plotting.csv"))
+data2plot =  merge(data2plot,hcp_annot,by="parcel_index")
+
+data2plot$BSR_LV1_thresh = data2plot$BSR_LV1
+mask = abs(data2plot$BSR_LV1_thresh)>abs(quantile(data2plot$BSR_LV1, c(0.8)))
+data2plot$BSR_LV1_thresh[!mask] = NA
+
+data2plot = data2plot[-c(131,172),]
+
+# show effect size throughout the entire brain
+g1 = ggseg(data = data2plot, mapping=aes(fill = BSR_LV1), position = "stacked", atlas = "glasser") + theme(plot.title = element_text(hjust = 0.5)) + guides(fill=guide_legend(title="BSR")) +
+  scale_fill_gradient2(midpoint=0, low="blue", mid="white", high="red", limits=c(-25, 55), breaks = round(seq(from=-25,to=55, by=25),2)) + guides(fill = guide_colourbar(nbin = 100))
+g1
+
+# show top 20% of brain regions ranked by BSR
+g2 = ggseg(data = data2plot, mapping=aes(fill = BSR_LV1_thresh), position = "stacked", atlas = "glasser") + theme(plot.title = element_text(hjust = 0.5)) + guides(fill=guide_legend(title="BSR")) +
+  scale_fill_gradient2(midpoint=0, low="blue", mid="white", high="red", limits=c(-25, 55), breaks = round(seq(from=-25,to=55, by=25),2)) + guides(fill = guide_colourbar(nbin = 100))
+g2
+```
+
+Plot a histogram of the correlation between H and the sex*diagnosis interaction effect across all bootstrap 10,000 resamples. The actual correlation in the real data is shown with the vertical line. This analysis will show us descriptively the correlation between H and the interaction effect, as well as showing that in bootstrap analysis that this correlation is indeed non-zero, as the previous analysis already showed us. 
+
+```{r, warning=FALSE, message=FALSE}
+data2plot = read.csv(file.path(resultpath,"pls_SEXbyDX_H_bootres4plotting_LV1_ci95.csv"))
+
+p = ggplot(data = data2plot, aes(x = boot_res)) + geom_histogram()
+p = p + geom_vline(xintercept=data2plot$boot_res[1])
+p = p + xlab("Bootstrap Correlation")
+p
+```
+
+PLS analysis of the specific sex main effect
+
+```{r, warning=FALSE, message=FALSE}
+data2plot = read.csv(file.path(resultpath,"pls_SEX_H_brainBSR4plotting.csv"))
+data2plot =  merge(data2plot,hcp_annot,by="parcel_index")
+
+
+data2plot$BSR_LV1_thresh = data2plot$BSR_LV1
+mask = abs(data2plot$BSR_LV1_thresh)>abs(quantile(data2plot$BSR_LV1, c(0.8)))
+data2plot$BSR_LV1_thresh[!mask] = NA
+
+data2plot = data2plot[-c(131,172),]
+
+# show effect size throughout the entire brain
+g1 = ggseg(data = data2plot, mapping=aes(fill = BSR_LV1_thresh), position = "stacked", atlas = "glasser") + theme(plot.title = element_text(hjust = 0.5)) + guides(fill=guide_legend(title="BSR")) +
+  scale_fill_gradient2(midpoint=0, low="blue", mid="white", high="red", limits=c(-25, 100), breaks = round(seq(from=-25,to=100, by=25),2)) + guides(fill = guide_colourbar(nbin = 100))
+g1
+```
+
+Plot a histogram of the correlation between H and the sex main effect across all bootstrap 10,000 resamples. The actual correlation in the real data is shown with the vertical line.
+
+```{r, warning=FALSE, message=FALSE}
+data2plot = read.csv(file.path(resultpath,"pls_SEX_H_bootres4plotting_LV1_ci95.csv"))
+
+p = ggplot(data = data2plot, aes(x = boot_res)) + geom_histogram()
+p = p + geom_vline(xintercept=data2plot$boot_res[1])
+p = p + xlab("Bootstrap Correlation")
+p
+```
+
+

@@ -1,0 +1,147 @@
+---
+title: "Overlap between ASD Genes and DHT DE genes"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning=FALSE, message=FALSE}
+easypackages::libraries("here","ggplot2","gplots","ggseg","ggsegExtra","tidyverse","matlabr")
+code_dir = here("code")
+source(file.path(code_dir,"genelistOverlap.R"))
+
+genelist_dir = here("data","asd_genelists")
+
+backgroundTotal = 13284
+dht_de_genes = read.delim(file.path(genelist_dir,"dysreg_sv_limma_FDR_q0.05_resultTable.txt"))
+dht_de_genes = as.character(dht_de_genes$GeneSymbol)
+
+# ASD risk genes from Satterstrom et al., 2020, Cell
+satterstrom_102_Ex = as.character(read.csv(file.path(genelist_dir,"satterstrom_2020_cell_102asdriskgenes_ExGenes.txt"),header = FALSE)$V1)
+satterstrom_102_In = as.character(read.csv(file.path(genelist_dir,"satterstrom_2020_cell_102asdriskgenes_InGenes.txt"),header = FALSE)$V1)
+satterstrom_102_MG = as.character(read.csv(file.path(genelist_dir,"satterstrom_2020_cell_102asdriskgenes_MicrogliaGenes.txt"),header = FALSE)$V1)
+satterstrom_102_AsOPC = as.character(read.csv(file.path(genelist_dir,"satterstrom_2020_cell_102asdriskgenes_AsOPCGenes.txt"),header = FALSE)$V1)
+
+# genes from Velmeshev et al., 2019, Science, single nucleus RNA-seq DE genes in excitatory neurons
+excitatory_de_genes = as.character(read.csv(file.path(genelist_dir,"velmeshev_2019_science_L23456degenes.txt"),header = FALSE)$V1)
+
+# genes from Velmeshev et al., 2019, Science, single nucleus RNA-seq DE genes in inhibitory neurons
+inhibitory_de_genes = as.character(read.csv(file.path(genelist_dir,"velmeshev_2019_science_INPVSSTVIPSV2Cdegenes.txt"),header = FALSE)$V1)
+
+# genes from Velmeshev et al., 2019, Science, single nucleus RNA-seq DE genes in Microglia
+microglia_de_genes = as.character(read.csv(file.path(genelist_dir,"velmeshev_2019_science_Microgliadegenes.txt"),header = FALSE)$V1)
+
+# genes from Velmeshev et al., 2019, Science, single nucleus RNA-seq DE genes in Oligodendrocytes
+oligodendrocyte_de_genes = as.character(read.csv(file.path(genelist_dir,"velmeshev_2019_science_Oligodendrocytesdegenes.txt"),header = FALSE)$V1)
+
+# genes from Velmeshev et al., 2019, Science, single nucleus RNA-seq DE genes in Astrocytes
+astrocyte_de_genes = as.character(read.csv(file.path(genelist_dir,"velmeshev_2019_science_Astrocytedegenes.txt"),header = FALSE)$V1)
+
+# genes from Velmeshev et al., 2019, Science, single nucleus RNA-seq DE genes in OPCs
+opc_de_genes = as.character(read.csv(file.path(genelist_dir,"velmeshev_2019_science_OPCdegenes.txt"),header = FALSE)$V1)
+```
+
+## Overlap between Excitatory neurons in Velmeshev et al., 2019, Science AND any excitatory gene from Satterstrom
+
+```{r, warning=FALSE, message=FALSE}
+ExRisk_de_genes = unique(c(excitatory_de_genes,
+                           satterstrom_102_Ex))
+overlap_ExRisk_res = genelistOverlap(data.frame(dht_de_genes),
+                                data.frame(ExRisk_de_genes),
+                                backgroundTotal,
+                                print_result = FALSE,
+                                header = FALSE)
+overlap_ExRisk_res[[1]]$OR
+overlap_ExRisk_res[[1]]$hypergeo_p
+sort(overlap_ExRisk_res[[1]]$overlapping_genes)
+```
+
+## Overlap between Inhibitory neurons in Velmeshev et al., 2019, Science AND any Inhibitory gene from Satterstrom
+
+```{r, warning=FALSE, message=FALSE}
+InRisk_de_genes = unique(c(inhibitory_de_genes,
+                           satterstrom_102_In))
+overlap_InRisk_res = genelistOverlap(data.frame(dht_de_genes),
+                                data.frame(InRisk_de_genes),
+                                backgroundTotal,
+                                print_result = FALSE,
+                                header = FALSE)
+overlap_InRisk_res[[1]]$OR
+overlap_InRisk_res[[1]]$hypergeo_p
+sort(overlap_InRisk_res[[1]]$overlapping_genes)
+```
+
+## Overlap between Microglia cells in Velmeshev et al., 2019, Science AND any Microglia gene from Satterstrom
+
+```{r, warning=FALSE, message=FALSE}
+MGRisk_de_genes = unique(c(microglia_de_genes,
+                           satterstrom_102_MG))
+overlap_MGRisk_res = genelistOverlap(data.frame(dht_de_genes),
+                                data.frame(MGRisk_de_genes),
+                                backgroundTotal,
+                                print_result = FALSE,
+                                header = FALSE)
+overlap_MGRisk_res[[1]]$OR
+overlap_MGRisk_res[[1]]$hypergeo_p
+sort(overlap_MGRisk_res[[1]]$overlapping_genes)
+```
+
+## Overlap between Astrocyte, OPC, or Oligodendrocyte cells in Velmeshev et al., 2019, Science AND any Astrocyte and OPC gene from Satterstrom
+
+```{r, warning=FALSE, message=FALSE}
+AsOPCRisk_de_genes = unique(c(oligodendrocyte_de_genes,
+                              opc_de_genes,
+                              astrocyte_de_genes,
+                              satterstrom_102_AsOPC))
+overlap_AsOPCRisk_res = genelistOverlap(data.frame(dht_de_genes),
+                                data.frame(AsOPCRisk_de_genes),
+                                backgroundTotal,
+                                print_result = FALSE,
+                                header = FALSE)
+overlap_AsOPCRisk_res[[1]]$OR
+overlap_AsOPCRisk_res[[1]]$hypergeo_p
+sort(overlap_AsOPCRisk_res[[1]]$overlapping_genes)
+```
+
+## Make a heatmap of overlapping DHT and autism-associated excitatory genes
+
+```{r, warning=FALSE, message=FALSE}
+df = read.csv(here("data","asd_genelists","overlap_dht_de_data.csv"),row.names=1)
+df = as.matrix(df)
+
+# plot the heatmap of the data matrix
+heatmap.2(df,
+          Rowv=TRUE, Colv=TRUE, 
+          col=bluered,
+          scale="row", 
+          trace="none",
+          srtCol = 25)
+```
+
+## Plot percent overlap between HCP parc regions and FDR q<0.01 DHT DE and ASD E genes map
+
+```{r, warning=FALSE, message=FALSE}
+options(matlab.path = "/Applications/MATLAB_R2019b.app/bin")
+
+RUN_MATLAB = TRUE
+if (RUN_MATLAB){
+  code2run = sprintf("cd %s; calculate_overlap_hcpParc_dhtasdEmap;",code_dir)
+  res = run_matlab_code(code2run)
+} # if (RUN_MATLAB)
+
+dir2use = here("data","ge_maps")
+df2plot = read.csv(file.path(dir2use,"hcp_fdr01_percent_overlap.csv"))
+
+# show effect size throughout the entire brain
+g1 = ggseg(.data=df2plot, 
+           atlas=glasser, 
+           position="stacked",
+           mapping=aes(fill=percent_overlap)) +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  guides(fill=guide_legend(title="% Overlap")) +
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100),limits=c(0,100)) + 
+  guides(fill = guide_colourbar(nbin = 100))
+g1
+```

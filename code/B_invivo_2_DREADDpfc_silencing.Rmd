@@ -1,0 +1,413 @@
+---
+title: "DREADD PFC Silencing"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup libraries and paths
+
+```{r, warning=FALSE, message=FALSE}
+# load libraries you'll need
+library(easypackages)
+libraries("nlme","ggplot2","here","matlabr","reshape2")
+
+# define paths
+codepath = here("code")
+phenopath  = here("data","dreadd")
+```
+
+## Run MATLAB code to estimate H
+
+```{r, warning=FALSE, message=FALSE}
+RUNMATLAB = FALSE
+if(RUNMATLAB){
+  code2run = sprintf("cd %s; B_invivo_2_DREADDpfc_silencing;",codepath)
+  res_tmp = run_matlab_code(code2run)
+}
+```
+
+
+## Setup data for analysis
+
+```{r, warning=FALSE, message=FALSE}
+# initial information
+window_size = 512
+nwindows = 3389
+vol_inject_start = 900
+vol_treatment_start = 1800
+
+# read in sliding-window analysis data
+data_win = read.csv(file.path(phenopath,"pheno_data+Hwin_dreaddsilencing.csv"))
+
+# melt the data frame into long format
+data_win_long = melt(data_win, 
+                     id.vars = c("filename","condition","scan_day","H"))
+colnames(data_win_long)[ncol(data_win_long)] = "Hwin"
+
+# make a time column
+data_win_long$time = NA
+for (i in 1:nwindows){
+  mask = data_win_long$variable==sprintf("window_%04d",i)
+  data_win_long[mask,"time"] = i
+}
+
+# make column indicating treatment phase
+data_win_long$treatment_phase = NA
+data_win_long$treatment_phase[data_win_long$time<=(vol_inject_start-window_size)-1] = "Baseline"
+data_win_long$treatment_phase[data_win_long$time>=(vol_inject_start-window_size) & data_win_long$time<=(vol_treatment_start-window_size)-1] = "Transition"
+data_win_long$treatment_phase[data_win_long$time>(vol_treatment_start-window_size)] = "Treatment"
+data_win_long$treatment_phase = factor(data_win_long$treatment_phase)
+```
+
+## Main linear mixed effect model on sliding window H data
+
+```{r, warning=FALSE, message=FALSE}
+# pick data to use in model
+df2use = data_win_long
+
+# formulas for fixed and random effects
+fx_form = as.formula("Hwin ~ scan_day + condition*time*treatment_phase")
+rx_form = as.formula("~ time|filename + treatment_phase|filename")
+
+# other things to include in the call to lme
+ctrl = lmeControl(opt='optim', msMaxIter = 500)
+ml_method = "REML"
+
+# run the lme model
+mod2use = eval(substitute(lme(fixed = fx_form, 
+                               random = rx_form, 
+                               data = df2use, 
+                               na.action = na.omit, 
+                               control=ctrl, 
+                               method = ml_method),
+                           list(fx_form = fx_form, rx_form = rx_form)))
+
+# compute ANOVA stats from the model
+anova(mod2use)
+```
+
+## Decomposing the Time x DREADD x Treatment Phase interaction
+
+### Baseline
+
+```{r, warning=FALSE, message=FALSE}
+# grab data from Baseline period
+df2use = subset(data_win_long, data_win_long$treatment_phase=="Baseline")
+
+# formulas
+fx_form = as.formula("Hwin ~ scan_day + condition*time")
+rx_form = as.formula("~ time|filename")
+
+# run model
+mod2use = eval(substitute(lme(fixed = fx_form, 
+                               random = rx_form, 
+                               data = df2use, 
+                               na.action = na.omit, 
+                               control=ctrl, 
+                               method = ml_method),
+                           list(fx_form = fx_form, rx_form = rx_form)))
+
+# ANOVA stats on the model
+anova(mod2use)
+
+# compute descriptive stats - mean and SD
+descrip_res = data.frame(matrix(nrow = 2, ncol = 2))
+rownames(descrip_res) = c("DREADD","SHAM")
+colnames(descrip_res) = c("Mean","SD")
+descrip_res["DREADD","Mean"] = mean(df2use[df2use$condition=="DREADD","Hwin"], na.rm = TRUE)
+descrip_res["SHAM","Mean"] = mean(df2use[df2use$condition=="SHAM","Hwin"], na.rm = TRUE)
+descrip_res["DREADD","SD"] = sd(df2use[df2use$condition=="DREADD","Hwin"], na.rm = TRUE)
+descrip_res["SHAM","SD"] = sd(df2use[df2use$condition=="SHAM","Hwin"], na.rm = TRUE)
+descrip_res
+```
+
+### Transition
+
+```{r, warning=FALSE, message=FALSE}
+# grab data for Transition period
+df2use = subset(data_win_long, data_win_long$treatment_phase=="Transition")
+
+# formulas
+fx_form = as.formula("Hwin ~  scan_day + condition*time")
+rx_form = as.formula("~ time|filename")
+
+# run model
+mod2use = eval(substitute(lme(fixed = fx_form, 
+                               random = rx_form, 
+                               data = df2use, 
+                               na.action = na.omit, 
+                               control=ctrl, 
+                               method = ml_method),
+                          list(fx_form = fx_form, rx_form = rx_form)))
+
+# ANOVA stats
+anova(mod2use)
+
+# compute descriptives
+descrip_res = data.frame(matrix(nrow = 2, ncol = 2))
+rownames(descrip_res) = c("DREADD","SHAM")
+colnames(descrip_res) = c("Mean","SD")
+descrip_res["DREADD","Mean"] = mean(df2use[df2use$condition=="DREADD","Hwin"], na.rm = TRUE)
+descrip_res["SHAM","Mean"] = mean(df2use[df2use$condition=="SHAM","Hwin"], na.rm = TRUE)
+descrip_res["DREADD","SD"] = sd(df2use[df2use$condition=="DREADD","Hwin"], na.rm = TRUE)
+descrip_res["SHAM","SD"] = sd(df2use[df2use$condition=="SHAM","Hwin"], na.rm = TRUE)
+descrip_res
+```
+
+### Treatment
+
+```{r, warning=FALSE, message=FALSE}
+# grab data from Treatment period
+df2use = subset(data_win_long, data_win_long$treatment_phase=="Treatment")
+
+# formulas
+fx_form = as.formula("Hwin ~  scan_day + condition*time")
+rx_form = as.formula("~ time|filename")
+
+# run model
+mod2use = eval(substitute(lme(fixed = fx_form, 
+                               random = rx_form, 
+                               data = df2use, 
+                               na.action = na.omit, 
+                               control=ctrl, 
+                               method = ml_method),
+                           list(fx_form = fx_form, rx_form = rx_form)))
+
+# ANOVA stats
+anova(mod2use)
+
+# compute descriptives
+descrip_res = data.frame(matrix(nrow = 2, ncol = 2))
+rownames(descrip_res) = c("DREADD","SHAM")
+colnames(descrip_res) = c("Mean","SD")
+descrip_res["DREADD","Mean"] = mean(df2use[df2use$condition=="DREADD","Hwin"], na.rm = TRUE)
+descrip_res["SHAM","Mean"] = mean(df2use[df2use$condition=="SHAM","Hwin"], na.rm = TRUE)
+descrip_res["DREADD","SD"] = sd(df2use[df2use$condition=="DREADD","Hwin"], na.rm = TRUE)
+descrip_res["SHAM","SD"] = sd(df2use[df2use$condition=="SHAM","Hwin"], na.rm = TRUE)
+descrip_res
+```
+
+## Plot
+
+```{r, warning=FALSE, message=FALSE}
+# plotting using GAM smoother for both individual and group trajectories
+yLims = c(1.4,1.8)
+p = ggplot(data = data_win_long, 
+           aes(x = time,
+               y = Hwin,
+               group = filename)) +
+            facet_grid(. ~ condition)
+
+# add smoothed individual lines for each mouse
+p = p + geom_smooth(se = FALSE ,colour='gray75',alpha=0.1)
+
+# add group-level fit line
+p = p + geom_smooth(se=TRUE, aes(group = interaction(condition,treatment_phase), colour = treatment_phase), size=4)
+
+# add other stuff to the plot
+p = p + geom_vline(xintercept = (vol_inject_start-window_size)) +
+  geom_vline(xintercept = vol_treatment_start-window_size) +
+  ylab("Hurst Exponent (H)") +
+  xlab("Time Window") +
+  scale_y_continuous(limits = yLims)
+
+# save figure
+# ggsave(filename = here("figures","DREADDsilencing_pfc_sliding_window_fig_GAMsmooth.pdf"))
+p
+```
+
+
+
+# fALFF
+
+## Setup data for analysis
+
+```{r, warning=FALSE, message=FALSE}
+# initial information
+window_size = 512
+nwindows = 3389
+vol_inject_start = 900
+vol_treatment_start = 1800
+
+# read in sliding-window analysis data
+data_win = read.csv(file.path(phenopath,"pheno_data+fALFFwin_dreaddsilencing.csv"))
+
+# melt the data frame into long format
+data_win_long = melt(data_win, 
+                     id.vars = c("filename","condition","scan_day"))
+colnames(data_win_long)[ncol(data_win_long)] = "fALFFwin"
+
+# make a time column
+data_win_long$time = NA
+for (i in 1:nwindows){
+  mask = data_win_long$variable==sprintf("window_%04d",i)
+  data_win_long[mask,"time"] = i
+}
+
+# make column indicating treatment phase
+data_win_long$treatment_phase = NA
+data_win_long$treatment_phase[data_win_long$time<=(vol_inject_start-window_size)-1] = "Baseline"
+data_win_long$treatment_phase[data_win_long$time>=(vol_inject_start-window_size) & data_win_long$time<=(vol_treatment_start-window_size)-1] = "Transition"
+data_win_long$treatment_phase[data_win_long$time>(vol_treatment_start-window_size)] = "Treatment"
+data_win_long$treatment_phase = factor(data_win_long$treatment_phase)
+```
+
+## Main linear mixed effect model on sliding window H data
+
+```{r, warning=FALSE, message=FALSE}
+# pick data to use in model
+df2use = data_win_long
+
+# formulas for fixed and random effects
+fx_form = as.formula("fALFFwin ~ scan_day + condition*time*treatment_phase")
+rx_form = as.formula("~ time|filename + treatment_phase|filename")
+
+# other things to include in the call to lme
+ctrl = lmeControl(opt='optim', msMaxIter = 500)
+ml_method = "REML"
+
+# run the lme model
+mod2use = eval(substitute(lme(fixed = fx_form, 
+                               random = rx_form, 
+                               data = df2use, 
+                               na.action = na.omit, 
+                               control=ctrl, 
+                               method = ml_method),
+                           list(fx_form = fx_form, rx_form = rx_form)))
+
+# compute ANOVA stats from the model
+anova(mod2use)
+```
+
+## Decomposing the Time x DREADD x Treatment Phase interaction
+
+### Baseline
+
+```{r, warning=FALSE, message=FALSE}
+# grab data from Baseline period
+df2use = subset(data_win_long, data_win_long$treatment_phase=="Baseline")
+
+# formulas
+fx_form = as.formula("fALFFwin ~ scan_day + condition*time")
+rx_form = as.formula("~ time|filename")
+
+# run model
+mod2use = eval(substitute(lme(fixed = fx_form, 
+                               random = rx_form, 
+                               data = df2use, 
+                               na.action = na.omit, 
+                               control=ctrl, 
+                               method = ml_method),
+                           list(fx_form = fx_form, rx_form = rx_form)))
+
+# ANOVA stats on the model
+anova(mod2use)
+
+# compute descriptive stats - mean and SD
+descrip_res = data.frame(matrix(nrow = 2, ncol = 2))
+rownames(descrip_res) = c("DREADD","SHAM")
+colnames(descrip_res) = c("Mean","SD")
+descrip_res["DREADD","Mean"] = mean(df2use[df2use$condition=="DREADD","fALFFwin"], na.rm = TRUE)
+descrip_res["SHAM","Mean"] = mean(df2use[df2use$condition=="SHAM","fALFFwin"], na.rm = TRUE)
+descrip_res["DREADD","SD"] = sd(df2use[df2use$condition=="DREADD","fALFFwin"], na.rm = TRUE)
+descrip_res["SHAM","SD"] = sd(df2use[df2use$condition=="SHAM","fALFFwin"], na.rm = TRUE)
+descrip_res
+```
+
+### Transition
+
+```{r, warning=FALSE, message=FALSE}
+# grab data for Transition period
+df2use = subset(data_win_long, data_win_long$treatment_phase=="Transition")
+
+# formulas
+fx_form = as.formula("fALFFwin ~  scan_day + condition*time")
+rx_form = as.formula("~ time|filename")
+
+# run model
+mod2use = eval(substitute(lme(fixed = fx_form, 
+                               random = rx_form, 
+                               data = df2use, 
+                               na.action = na.omit, 
+                               control=ctrl, 
+                               method = ml_method),
+                          list(fx_form = fx_form, rx_form = rx_form)))
+
+# ANOVA stats
+anova(mod2use)
+
+# compute descriptives
+descrip_res = data.frame(matrix(nrow = 2, ncol = 2))
+rownames(descrip_res) = c("DREADD","SHAM")
+colnames(descrip_res) = c("Mean","SD")
+descrip_res["DREADD","Mean"] = mean(df2use[df2use$condition=="DREADD","fALFFwin"], na.rm = TRUE)
+descrip_res["SHAM","Mean"] = mean(df2use[df2use$condition=="SHAM","fALFFwin"], na.rm = TRUE)
+descrip_res["DREADD","SD"] = sd(df2use[df2use$condition=="DREADD","fALFFwin"], na.rm = TRUE)
+descrip_res["SHAM","SD"] = sd(df2use[df2use$condition=="SHAM","fALFFwin"], na.rm = TRUE)
+descrip_res
+```
+
+### Treatment
+
+```{r, warning=FALSE, message=FALSE}
+# grab data from Treatment period
+df2use = subset(data_win_long, data_win_long$treatment_phase=="Treatment")
+
+# formulas
+fx_form = as.formula("fALFFwin ~  scan_day + condition*time")
+rx_form = as.formula("~ time|filename")
+
+# run model
+mod2use = eval(substitute(lme(fixed = fx_form, 
+                               random = rx_form, 
+                               data = df2use, 
+                               na.action = na.omit, 
+                               control=ctrl, 
+                               method = ml_method),
+                           list(fx_form = fx_form, rx_form = rx_form)))
+
+# ANOVA stats
+anova(mod2use)
+
+# compute descriptives
+descrip_res = data.frame(matrix(nrow = 2, ncol = 2))
+rownames(descrip_res) = c("DREADD","SHAM")
+colnames(descrip_res) = c("Mean","SD")
+descrip_res["DREADD","Mean"] = mean(df2use[df2use$condition=="DREADD","fALFFwin"], na.rm = TRUE)
+descrip_res["SHAM","Mean"] = mean(df2use[df2use$condition=="SHAM","fALFFwin"], na.rm = TRUE)
+descrip_res["DREADD","SD"] = sd(df2use[df2use$condition=="DREADD","fALFFwin"], na.rm = TRUE)
+descrip_res["SHAM","SD"] = sd(df2use[df2use$condition=="SHAM","fALFFwin"], na.rm = TRUE)
+descrip_res
+```
+
+## Plot
+
+```{r, warning=FALSE, message=FALSE}
+# plotting using GAM smoother for both individual and group trajectories
+yLims = c(0,1)
+p = ggplot(data = data_win_long, 
+           aes(x = time,
+               y = fALFFwin,
+               group = filename)) +
+            facet_grid(. ~ condition)
+
+# add smoothed individual lines for each mouse
+p = p + geom_smooth(se = FALSE ,colour='gray75',alpha=0.1)
+
+# add group-level fit line
+p = p + geom_smooth(se=TRUE, aes(group = interaction(condition,treatment_phase), colour = treatment_phase), size=5)
+
+# add other stuff to the plot
+p = p + geom_vline(xintercept = (vol_inject_start-window_size)) +
+  geom_vline(xintercept = vol_treatment_start-window_size) +
+  ylab("fALFF") +
+  xlab("Time Window") +
+  scale_y_continuous(limits = yLims)
+
+# save figure
+# ggsave(filename = here("figures","DREADDsilencing_pfc_sliding_window_fig_GAMsmooth_fALFF.pdf"))
+p
+```
